@@ -199,6 +199,17 @@ class DataService:
         funding_data = deriv.get("funding_rate", {})
         liq_data = deriv.get("liquidations", {})
         
+        # Calculate CVD (cumulative volume delta) in USD
+        cvd_cumulative = 0.0
+        cvd_values = []
+        for c in candles:
+            # Direction: +1 if bullish candle, -1 if bearish
+            direction = 1 if c["close"] >= c["open"] else -1
+            # Volume delta in USD
+            delta_usd = c["volume"] * c["close"] * direction
+            cvd_cumulative += delta_usd
+            cvd_values.append(cvd_cumulative)
+        
         # Build market structure with derivatives
         market_structure = []
         for i, candle in enumerate(candles):
@@ -211,7 +222,7 @@ class DataService:
                 "oi_change_pct": oi_data.get("change_24h") if is_recent and oi_data else None,
                 "long_liquidations": liq_data.get("long_24h") / 24 if is_recent and liq_data and liq_data.get("long_24h") else None,
                 "short_liquidations": liq_data.get("short_24h") / 24 if is_recent and liq_data and liq_data.get("short_24h") else None,
-                "cvd": None,
+                "cvd": cvd_values[i],
             }
             market_structure.append(ms)
         
@@ -539,10 +550,11 @@ class DataService:
         return float(returns.tail(periods).std() * np.sqrt(periods))
     
     def _calculate_cvd(self, df: pd.DataFrame) -> Optional[float]:
-        """Calculate Cumulative Volume Delta estimate."""
+        """Calculate Cumulative Volume Delta in USD."""
         if len(df) < 2:
             return None
         df = df.copy()
         df["direction"] = np.where(df["close"] >= df["open"], 1, -1)
-        df["delta"] = df["volume"] * df["direction"]
-        return float(df["delta"].sum())
+        # Volume delta in USD (volume * price * direction)
+        df["delta_usd"] = df["volume"] * df["close"] * df["direction"]
+        return float(df["delta_usd"].sum())

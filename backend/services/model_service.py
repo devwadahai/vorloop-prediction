@@ -446,23 +446,46 @@ class ModelService:
         """Calculate feature contributions to prediction."""
         contributions = []
         
-        # Define feature interpretations
-        interpretations = {
-            "returns_1h": ("Momentum (1h)", "bullish" if features.get("returns_1h", 0) > 0 else "bearish"),
-            "returns_24h": ("Momentum (24h)", "bullish" if features.get("returns_24h", 0) > 0 else "bearish"),
-            "funding_rate": ("Funding Rate", "bearish" if features.get("funding_rate", 0) > 0.0001 else "bullish"),
-            "cvd": ("Volume Delta", "bullish" if features.get("cvd", 0) > 0 else "bearish"),
-            "volatility_1h": ("Volatility", "neutral"),
+        # Define feature interpretations with proper scaling
+        # contribution_scale converts raw value to a 0-100 contribution score
+        feature_config = {
+            "returns_1h": {
+                "name": "Momentum (1h)",
+                "direction": "bullish" if features.get("returns_1h", 0) > 0 else "bearish",
+                "scale": 1000,  # 0.01 (1%) becomes 10 contribution
+            },
+            "returns_24h": {
+                "name": "Momentum (24h)",
+                "direction": "bullish" if features.get("returns_24h", 0) > 0 else "bearish",
+                "scale": 500,
+            },
+            "funding_rate": {
+                "name": "Funding Rate",
+                "direction": "bearish" if features.get("funding_rate", 0) > 0.0001 else "bullish",
+                "scale": 50000,  # 0.0001 becomes 5 contribution
+            },
+            "cvd": {
+                "name": "Volume Delta",
+                "direction": "bullish" if features.get("cvd", 0) > 0 else "bearish",
+                "scale": 0.00001,  # $1M becomes 10 contribution
+            },
+            "volatility_1h": {
+                "name": "Volatility",
+                "direction": "neutral",
+                "scale": 500,
+            },
         }
         
         for feature, value in features.items():
-            if feature in interpretations:
-                name, direction = interpretations[feature]
+            if feature in feature_config:
+                config = feature_config[feature]
+                # Scale contribution to reasonable 0-100 range
+                contribution = min(abs(value) * config["scale"], 50)  # Cap at 50
                 contributions.append({
-                    "feature": name,
-                    "value": round(value, 6),
-                    "contribution": round(abs(value) * 100, 2),  # Simplified
-                    "direction": direction,
+                    "feature": config["name"],
+                    "value": round(value, 6) if abs(value) < 1000 else round(value / 1e6, 2),
+                    "contribution": round(contribution, 1),
+                    "direction": config["direction"],
                 })
         
         return contributions
