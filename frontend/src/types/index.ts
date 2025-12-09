@@ -103,7 +103,7 @@ export interface Asset {
   enabled: boolean
 }
 
-export type TimeInterval = '1m' | '5m' | '15m' | '1h' | '4h' | '1d'
+export type TimeInterval = '1m' | '3m' | '5m' | '10m' | '15m' | '1h' | '4h' | '1d'
 
 export type ChartOverlay = 'prediction' | 'liquidations' | 'volume' | 'oi'
 
