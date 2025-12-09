@@ -13,7 +13,7 @@ const client = axios.create({
 })
 
 // Mock data for development
-const MOCK_MODE = true // Set to false when backend is running
+const MOCK_MODE = false // Set to true if backend is not running
 
 const generateMockCandles = (count: number) => {
   const candles = []

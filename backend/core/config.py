@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     bybit_api_key: Optional[str] = None
     bybit_api_secret: Optional[str] = None
     
+    # Coinglass API (for aggregated derivatives data)
+    coinglass_api_key: Optional[str] = None
+    
     # Model Configuration
     model_version: str = "v1.0.0"
     model_retrain_hour: int = 0  # UTC hour for daily retrain
