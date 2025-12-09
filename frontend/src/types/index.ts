@@ -38,7 +38,7 @@ export interface ConePoint {
 export interface Prediction {
   asset: string
   timestamp: string
-  horizon_hours: number
+  horizon_minutes: number
   p_up: number
   p_down: number
   expected_move: number

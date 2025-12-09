@@ -34,9 +34,21 @@ export function PredictionPanel() {
       <div className="p-4 border-b border-terminal-border">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-display font-semibold">Prediction</h2>
-          <span className="text-xs text-terminal-muted">
-            {prediction.horizon_hours}h horizon
-          </span>
+          <div className="flex gap-1">
+            {[1, 3, 5, 10].map((mins) => (
+              <button
+                key={mins}
+                onClick={() => useStore.getState().setHorizonMinutes(mins)}
+                className={`px-2 py-0.5 text-xs rounded ${
+                  prediction.horizon_minutes === mins
+                    ? 'bg-accent text-white'
+                    : 'bg-terminal-bg text-terminal-muted hover:text-white'
+                }`}
+              >
+                {mins}m
+              </button>
+            ))}
+          </div>
         </div>
         <p className="text-xs text-terminal-muted">
           Updated {formatTime(prediction.timestamp)}

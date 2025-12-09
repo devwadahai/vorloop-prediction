@@ -12,6 +12,7 @@ interface Store {
   // State
   selectedAsset: string
   selectedInterval: TimeInterval
+  horizonMinutes: number
   marketData: MarketData | null
   prediction: Prediction | null
   explanation: Explanation | null
@@ -22,6 +23,7 @@ interface Store {
   // Actions
   setSelectedAsset: (asset: string) => void
   setSelectedInterval: (interval: TimeInterval) => void
+  setHorizonMinutes: (minutes: number) => void
   toggleOverlay: (overlay: ChartOverlay) => void
   fetchMarketData: () => Promise<void>
   fetchPrediction: () => Promise<void>
@@ -31,7 +33,8 @@ interface Store {
 export const useStore = create<Store>((set, get) => ({
   // Initial state
   selectedAsset: 'BTC',
-  selectedInterval: '1h',
+  selectedInterval: '1m',
+  horizonMinutes: 5,
   marketData: null,
   prediction: null,
   explanation: null,
@@ -49,6 +52,11 @@ export const useStore = create<Store>((set, get) => ({
   setSelectedInterval: (interval) => {
     set({ selectedInterval: interval, marketData: null })
     get().fetchMarketData()
+  },
+  
+  setHorizonMinutes: (minutes) => {
+    set({ horizonMinutes: minutes })
+    get().fetchPrediction()
   },
   
   toggleOverlay: (overlay) => {
@@ -74,10 +82,10 @@ export const useStore = create<Store>((set, get) => ({
   },
   
   fetchPrediction: async () => {
-    const { selectedAsset } = get()
+    const { selectedAsset, horizonMinutes } = get()
     
     try {
-      const prediction = await api.getPrediction(selectedAsset, 4)
+      const prediction = await api.getPrediction(selectedAsset, horizonMinutes)
       set({ prediction })
     } catch (error) {
       console.error('Prediction fetch error:', error)

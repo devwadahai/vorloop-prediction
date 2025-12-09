@@ -59,17 +59,18 @@ const generateMockMarketStructure = (count: number) => {
   return structure
 }
 
-const generateMockCone = (currentPrice: number) => {
+const generateMockCone = (currentPrice: number, horizonMinutes: number) => {
   const cone = []
   const now = Date.now()
   const volatility = 0.02
+  const steps = Math.min(horizonMinutes, 10)
   
-  for (let h = 0; h <= 4; h++) {
-    const drift = 0.001 * h
-    const vol = volatility * Math.sqrt(h / 24)
+  for (let m = 0; m <= steps; m++) {
+    const drift = 0.0001 * m
+    const vol = volatility * Math.sqrt(m / 60)
     
     cone.push({
-      timestamp: new Date(now + h * 3600000).toISOString(),
+      timestamp: new Date(now + m * 60000).toISOString(),
       mid: currentPrice * (1 + drift),
       upper_1sigma: currentPrice * (1 + drift + vol),
       lower_1sigma: currentPrice * (1 + drift - vol),
@@ -100,7 +101,7 @@ export const api = {
     return response.data
   },
   
-  async getPrediction(asset: string, horizonHours: number): Promise<Prediction> {
+  async getPrediction(asset: string, horizonMinutes: number): Promise<Prediction> {
     if (MOCK_MODE) {
       const p_up = 0.5 + (Math.random() - 0.5) * 0.3
       const currentPrice = 42500
@@ -108,20 +109,20 @@ export const api = {
       return {
         asset,
         timestamp: new Date().toISOString(),
-        horizon_hours: horizonHours,
+        horizon_minutes: horizonMinutes,
         p_up: parseFloat(p_up.toFixed(4)),
         p_down: parseFloat((1 - p_up).toFixed(4)),
-        expected_move: parseFloat(((p_up - 0.5) * 0.02).toFixed(6)),
-        volatility: 0.015 + Math.random() * 0.01,
+        expected_move: parseFloat(((p_up - 0.5) * 0.005).toFixed(6)),
+        volatility: 0.005 + Math.random() * 0.005,
         confidence: p_up > 0.6 || p_up < 0.4 ? 'high' : 'medium',
         regime: p_up > 0.55 ? 'trend-up' : p_up < 0.45 ? 'trend-down' : 'ranging',
-        cone: generateMockCone(currentPrice),
+        cone: generateMockCone(currentPrice, horizonMinutes),
       }
     }
     
     const response = await client.post('/predict', {
       asset,
-      horizon_hours: horizonHours,
+      horizon_minutes: horizonMinutes,
     })
     return response.data
   },

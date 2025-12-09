@@ -17,7 +17,7 @@ router = APIRouter()
 class PredictionRequest(BaseModel):
     """Request model for prediction endpoint."""
     asset: str = Field(default="BTC", description="Asset symbol (BTC, ETH, etc.)")
-    horizon_hours: int = Field(default=4, ge=1, le=24, description="Prediction horizon in hours")
+    horizon_minutes: int = Field(default=5, ge=1, le=60, description="Prediction horizon in minutes")
 
 
 class ConePoint(BaseModel):
@@ -34,7 +34,7 @@ class PredictionResponse(BaseModel):
     """Response model for prediction endpoint."""
     asset: str
     timestamp: datetime
-    horizon_hours: int
+    horizon_minutes: int
     p_up: float = Field(ge=0, le=1)
     p_down: float = Field(ge=0, le=1)
     expected_move: float
@@ -176,7 +176,7 @@ async def predict(request: PredictionRequest, req: Request):
         # Generate prediction
         prediction = await model_service.predict(
             asset=request.asset,
-            horizon_hours=request.horizon_hours,
+            horizon_minutes=request.horizon_minutes,
             market_data=market_data
         )
         

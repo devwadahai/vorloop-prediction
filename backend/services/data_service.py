@@ -3,7 +3,7 @@ Data Service - Fetches and manages market data from exchanges.
 Supports:
 - Coinbase/Kraken for spot data (USA-friendly)
 - MEXC Futures for derivatives data
-- Coinglass for aggregated derivatives metrics
+- Coinglass for aggregated derivatives metrics (public v2 API)
 """
 import asyncio
 from datetime import datetime, timedelta
@@ -25,7 +25,7 @@ class DataService:
     
     # Derivatives
     MEXC_FUTURES_URL = "https://contract.mexc.com"
-    COINGLASS_URL = "https://open-api.coinglass.com"
+    COINGLASS_V2_URL = "https://open-api.coinglass.com/public/v2"
     
     # Symbol mappings per exchange
     SYMBOL_MAP = {
@@ -85,14 +85,12 @@ class DataService:
     async def start_streaming(self):
         """Start background data streaming."""
         self._running = True
-        logger.info("Starting data streaming (Coinbase + MEXC Futures + Coinglass)...")
+        logger.info("Starting data streaming (Coinbase + Coinglass)...")
         
         while self._running:
             try:
                 for asset in ["BTC", "ETH", "SOL"]:
-                    # Update spot data
                     await self._update_cache(asset)
-                    # Update derivatives data
                     await self._update_derivatives_cache(asset)
                 
                 await asyncio.sleep(5)
@@ -112,21 +110,21 @@ class DataService:
             logger.warning(f"Spot cache update failed for {asset}: {e}")
     
     async def _update_derivatives_cache(self, asset: str):
-        """Update derivatives data cache."""
+        """Update derivatives data cache from Coinglass."""
         try:
-            # Fetch from multiple sources in parallel
-            funding_task = self._fetch_mexc_funding_rate(asset)
+            # Fetch from Coinglass (aggregated data)
             oi_task = self._fetch_coinglass_open_interest(asset)
+            funding_task = self._fetch_coinglass_funding(asset)
             liq_task = self._fetch_coinglass_liquidations(asset)
             
-            funding, oi_data, liq_data = await asyncio.gather(
-                funding_task, oi_task, liq_task,
+            oi_data, funding_data, liq_data = await asyncio.gather(
+                oi_task, funding_task, liq_task,
                 return_exceptions=True
             )
             
             self._derivatives_cache[asset] = {
-                "funding_rate": funding if not isinstance(funding, Exception) else None,
                 "open_interest": oi_data if not isinstance(oi_data, Exception) else None,
+                "funding_rate": funding_data if not isinstance(funding_data, Exception) else None,
                 "liquidations": liq_data if not isinstance(liq_data, Exception) else None,
                 "updated": datetime.utcnow(),
             }
@@ -136,7 +134,6 @@ class DataService:
     
     async def get_latest_data(self, asset: str) -> Dict[str, Any]:
         """Get latest market data including derivatives."""
-        # Get spot data
         klines = await self._fetch_coinbase_candles(asset, "1m", 100)
         if not klines:
             klines = await self._fetch_kraken_candles(asset, "1m", 100)
@@ -153,9 +150,8 @@ class DataService:
             await self._update_derivatives_cache(asset)
             deriv = self._derivatives_cache.get(asset, {})
         
-        # Extract derivatives metrics
-        funding_rate = deriv.get("funding_rate")
         oi_data = deriv.get("open_interest", {})
+        funding_data = deriv.get("funding_rate", {})
         liq_data = deriv.get("liquidations", {})
         
         return {
@@ -163,7 +159,7 @@ class DataService:
             "timestamp": datetime.utcnow(),
             "price": float(latest["close"]),
             "ohlcv": latest,
-            "funding_rate": funding_rate,
+            "funding_rate": funding_data.get("avg_rate") if funding_data else None,
             "open_interest": oi_data.get("total_oi") if oi_data else None,
             "oi_change_24h": oi_data.get("change_24h") if oi_data else None,
             "long_liquidations_24h": liq_data.get("long_24h") if liq_data else None,
@@ -181,7 +177,6 @@ class DataService:
         limit: int
     ) -> Dict[str, Any]:
         """Get historical OHLCV and market structure data."""
-        # Fetch spot OHLCV
         klines = await self._fetch_coinbase_candles(asset, interval, limit)
         if not klines:
             klines = await self._fetch_kraken_candles(asset, interval, limit)
@@ -200,23 +195,22 @@ class DataService:
         
         # Get current derivatives data
         deriv = self._derivatives_cache.get(asset, {})
-        funding = deriv.get("funding_rate")
         oi_data = deriv.get("open_interest", {})
+        funding_data = deriv.get("funding_rate", {})
         liq_data = deriv.get("liquidations", {})
         
         # Build market structure with derivatives
         market_structure = []
         for i, candle in enumerate(candles):
-            # Only apply current derivatives data to recent candles
             is_recent = i >= len(candles) - 10
             
             ms = {
                 "timestamp": candle["timestamp"],
-                "funding_rate": funding if is_recent else None,
+                "funding_rate": funding_data.get("avg_rate") if is_recent and funding_data else None,
                 "open_interest": oi_data.get("total_oi") if is_recent and oi_data else None,
                 "oi_change_pct": oi_data.get("change_24h") if is_recent and oi_data else None,
-                "long_liquidations": liq_data.get("long_24h") / 24 if is_recent and liq_data else None,
-                "short_liquidations": liq_data.get("short_24h") / 24 if is_recent and liq_data else None,
+                "long_liquidations": liq_data.get("long_24h") / 24 if is_recent and liq_data and liq_data.get("long_24h") else None,
+                "short_liquidations": liq_data.get("short_24h") / 24 if is_recent and liq_data and liq_data.get("short_24h") else None,
                 "cvd": None,
             }
             market_structure.append(ms)
@@ -325,10 +319,146 @@ class DataService:
             return []
     
     # ========================================================================
-    # MEXC Futures API (Derivatives)
+    # Coinglass Public V2 API (Aggregated Derivatives Data)
     # ========================================================================
     
-    async def _fetch_mexc_funding_rate(self, asset: str) -> Optional[float]:
+    async def _fetch_coinglass_open_interest(self, asset: str) -> Optional[Dict]:
+        """Fetch aggregated open interest from Coinglass."""
+        session = await self._get_session()
+        symbol = self.SYMBOL_MAP["coinglass"].get(asset, asset)
+        
+        url = f"{self.COINGLASS_V2_URL}/open_interest"
+        params = {"symbol": symbol}
+        
+        headers = {"accept": "application/json"}
+        if settings.coinglass_api_key:
+            headers["coinglassSecret"] = settings.coinglass_api_key
+        
+        try:
+            async with session.get(url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if data.get("code") == "0" and data.get("data"):
+                        # Find the "All" exchange entry (aggregated)
+                        for item in data["data"]:
+                            if item.get("exchangeName") == "All":
+                                total_oi = float(item.get("openInterest", 0))
+                                change_24h = float(item.get("h24Change", 0)) / 100
+                                
+                                logger.info(f"Coinglass OI for {asset}: ${total_oi/1e9:.2f}B ({change_24h*100:+.2f}%)")
+                                return {
+                                    "total_oi": total_oi,
+                                    "change_24h": change_24h,
+                                }
+        except Exception as e:
+            logger.debug(f"Coinglass OI error: {e}")
+        
+        return None
+    
+    async def _fetch_coinglass_funding(self, asset: str) -> Optional[Dict]:
+        """Fetch aggregated funding rates from Coinglass."""
+        session = await self._get_session()
+        
+        url = f"{self.COINGLASS_V2_URL}/funding"
+        
+        headers = {"accept": "application/json"}
+        if settings.coinglass_api_key:
+            headers["coinglassSecret"] = settings.coinglass_api_key
+        
+        try:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if data.get("code") == "0" and data.get("data"):
+                        # Find the asset
+                        for item in data["data"]:
+                            if item.get("symbol") == asset:
+                                # Get weighted average from uMarginList
+                                u_margin = item.get("uMarginList", [])
+                                if u_margin:
+                                    rates = [float(ex.get("rate", 0)) for ex in u_margin if ex.get("rate")]
+                                    if rates:
+                                        avg_rate = sum(rates) / len(rates)
+                                        logger.info(f"Coinglass Funding for {asset}: {avg_rate*100:.4f}%")
+                                        return {
+                                            "avg_rate": avg_rate,
+                                            "exchanges": u_margin,
+                                        }
+        except Exception as e:
+            logger.debug(f"Coinglass funding error: {e}")
+        
+        # Fallback to MEXC
+        return await self._fetch_mexc_funding_rate(asset)
+    
+    async def _fetch_coinglass_liquidations(self, asset: str) -> Optional[Dict]:
+        """Fetch liquidation data from Coinglass."""
+        session = await self._get_session()
+        symbol = self.SYMBOL_MAP["coinglass"].get(asset, asset)
+        
+        url = f"{self.COINGLASS_V2_URL}/liquidation_info"
+        params = {"symbol": symbol, "time_type": "h24"}
+        
+        headers = {"accept": "application/json"}
+        if settings.coinglass_api_key:
+            headers["coinglassSecret"] = settings.coinglass_api_key
+        
+        try:
+            async with session.get(url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if data.get("code") == "0" and data.get("data"):
+                        liq = data["data"]
+                        
+                        # Try different field names
+                        long_24h = float(liq.get("longLiquidationUsd", liq.get("buyVolUsd", 0)))
+                        short_24h = float(liq.get("shortLiquidationUsd", liq.get("sellVolUsd", 0)))
+                        
+                        if long_24h > 0 or short_24h > 0:
+                            logger.info(f"Coinglass Liqs for {asset}: Long ${long_24h/1e6:.1f}M, Short ${short_24h/1e6:.1f}M")
+                            return {
+                                "long_24h": long_24h,
+                                "short_24h": short_24h,
+                                "total_24h": long_24h + short_24h,
+                            }
+        except Exception as e:
+            logger.debug(f"Coinglass liquidations error: {e}")
+        
+        # Try liquidation chart endpoint
+        try:
+            url2 = f"{self.COINGLASS_V2_URL}/liquidation_chart"
+            params2 = {"symbol": symbol, "time_type": "h24"}
+            
+            async with session.get(url2, params=params2, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if data.get("code") == "0" and data.get("data"):
+                        liq_list = data["data"]
+                        if isinstance(liq_list, list) and liq_list:
+                            # Sum the last 24 hours
+                            long_total = sum(float(l.get("longLiquidationUsd", l.get("buyVolUsd", 0))) for l in liq_list)
+                            short_total = sum(float(l.get("shortLiquidationUsd", l.get("sellVolUsd", 0))) for l in liq_list)
+                            
+                            if long_total > 0 or short_total > 0:
+                                logger.info(f"Coinglass Liqs (chart) for {asset}: Long ${long_total/1e6:.1f}M, Short ${short_total/1e6:.1f}M")
+                                return {
+                                    "long_24h": long_total,
+                                    "short_24h": short_total,
+                                    "total_24h": long_total + short_total,
+                                }
+        except Exception as e:
+            logger.debug(f"Coinglass liq chart error: {e}")
+        
+        return await self._estimate_liquidations(asset)
+    
+    # ========================================================================
+    # MEXC Futures API (Fallback)
+    # ========================================================================
+    
+    async def _fetch_mexc_funding_rate(self, asset: str) -> Optional[Dict]:
         """Fetch funding rate from MEXC Futures."""
         session = await self._get_session()
         symbol = self.SYMBOL_MAP["mexc"].get(asset, f"{asset}_USDT")
@@ -337,243 +467,18 @@ class DataService:
         
         try:
             async with session.get(url) as response:
-                if response.status != 200:
-                    return None
-                
-                data = await response.json()
-                if data.get("success") and data.get("data"):
-                    rate = float(data["data"].get("fundingRate", 0))
-                    logger.debug(f"MEXC funding rate for {asset}: {rate}")
-                    return rate
-                return None
-                
-        except Exception as e:
-            logger.debug(f"MEXC funding rate error for {asset}: {e}")
-            return None
-    
-    async def _fetch_mexc_open_interest(self, asset: str) -> Optional[Dict]:
-        """Fetch open interest from MEXC Futures."""
-        session = await self._get_session()
-        symbol = self.SYMBOL_MAP["mexc"].get(asset, f"{asset}_USDT")
-        
-        # Try ticker endpoint first
-        url = f"{self.MEXC_FUTURES_URL}/api/v1/contract/ticker"
-        params = {"symbol": symbol}
-        
-        try:
-            async with session.get(url, params=params) as response:
                 if response.status == 200:
                     data = await response.json()
                     if data.get("success") and data.get("data"):
-                        ticker = data["data"]
-                        hold_vol = float(ticker.get("holdVol", 0))
-                        last_price = float(ticker.get("lastPrice", 0))
-                        
-                        # MEXC contract sizes: BTC=0.0001, ETH=0.01, SOL=1
-                        contract_size = {"BTC": 0.0001, "ETH": 0.01, "SOL": 1, "BNB": 0.01}.get(asset, 0.01)
-                        oi_value = hold_vol * contract_size * last_price
-                        
-                        if oi_value > 0:
-                            logger.info(f"MEXC OI for {asset}: ${oi_value/1e9:.2f}B")
-                            return {
-                                "total_oi": oi_value,
-                                "change_24h": 0,
-                            }
+                        rate = float(data["data"].get("fundingRate", 0))
+                        return {"avg_rate": rate}
         except Exception as e:
-            logger.debug(f"MEXC ticker error for {asset}: {e}")
-        
-        # Fallback to contract detail
-        url2 = f"{self.MEXC_FUTURES_URL}/api/v1/contract/detail"
-        try:
-            async with session.get(url2, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if data.get("success") and data.get("data"):
-                        contract = data["data"]
-                        oi_val = float(contract.get("holdVolValue", contract.get("holdVol", 0)))
-                        if oi_val > 0:
-                            logger.info(f"MEXC OI (detail) for {asset}: ${oi_val/1e6:.1f}M")
-                            return {"total_oi": oi_val, "change_24h": 0}
-        except Exception as e:
-            logger.debug(f"MEXC OI detail error for {asset}: {e}")
-        
-        return None
-    
-    # ========================================================================
-    # Coinglass API (Aggregated Derivatives Data)
-    # ========================================================================
-    
-    async def _fetch_coinglass_open_interest(self, asset: str) -> Optional[Dict]:
-        """Fetch aggregated open interest from Coinglass."""
-        session = await self._get_session()
-        symbol = self.SYMBOL_MAP["coinglass"].get(asset, asset)
-        
-        # Try Coinglass API v3
-        url = "https://open-api-v3.coinglass.com/api/futures/openInterest/ohlc-aggregated-history"
-        params = {
-            "symbol": symbol,
-            "interval": "1h",
-            "limit": 24,
-        }
-        
-        headers = {"accept": "application/json"}
-        if settings.coinglass_api_key:
-            headers["coinglassSecret"] = settings.coinglass_api_key
-        
-        try:
-            async with session.get(url, params=params, headers=headers) as response:
-                logger.debug(f"Coinglass OI response for {asset}: status={response.status}")
-                
-                if response.status == 200:
-                    resp_text = await response.text()
-                    import json
-                    data = json.loads(resp_text)
-                    logger.debug(f"Coinglass OI response for {asset}: {resp_text[:500]}")
-                    if data.get("success") and data.get("data"):
-                        oi_list = data["data"]
-                        if oi_list:
-                            latest = oi_list[-1]
-                            oldest = oi_list[0] if len(oi_list) > 1 else latest
-                            
-                            total_oi = float(latest.get("o", 0))  # open interest
-                            prev_oi = float(oldest.get("o", total_oi))
-                            change_24h = (total_oi - prev_oi) / prev_oi if prev_oi > 0 else 0
-                            
-                            logger.info(f"Coinglass OI for {asset}: ${total_oi/1e9:.2f}B")
-                            return {
-                                "total_oi": total_oi,
-                                "change_24h": change_24h,
-                            }
-                    # Try alternate format
-                    if data.get("code") == "0" and data.get("data"):
-                        oi_list = data["data"]
-                        if oi_list:
-                            latest = oi_list[-1]
-                            total_oi = float(latest.get("openInterest", latest.get("oi", 0)))
-                            logger.info(f"Coinglass OI (alt) for {asset}: ${total_oi/1e9:.2f}B")
-                            return {"total_oi": total_oi, "change_24h": 0}
-        except Exception as e:
-            logger.debug(f"Coinglass OI error: {e}")
-        
-        # Try alternate endpoint
-        try:
-            url2 = "https://open-api-v3.coinglass.com/api/futures/openInterest/ohlc-history"
-            params2 = {"symbol": symbol, "interval": "1h", "limit": 1}
-            async with session.get(url2, params=params2, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if data.get("data"):
-                        oi_data = data["data"]
-                        if isinstance(oi_data, list) and oi_data:
-                            total_oi = float(oi_data[-1].get("o", 0))
-                            logger.info(f"Coinglass OI (v2) for {asset}: ${total_oi/1e9:.2f}B")
-                            return {"total_oi": total_oi, "change_24h": 0}
-        except Exception as e:
-            logger.debug(f"Coinglass OI v2 error: {e}")
-        
-        # Fallback to MEXC
-        return await self._fetch_mexc_open_interest(asset)
-    
-    async def _fetch_coinglass_liquidations(self, asset: str) -> Optional[Dict]:
-        """Fetch liquidation data from Coinglass."""
-        session = await self._get_session()
-        symbol = self.SYMBOL_MAP["coinglass"].get(asset, asset)
-        
-        headers = {"accept": "application/json"}
-        if settings.coinglass_api_key:
-            headers["coinglassSecret"] = settings.coinglass_api_key
-        
-        # Try aggregated liquidation endpoint
-        url = "https://open-api-v3.coinglass.com/api/futures/liquidation/v2/coin"
-        params = {"symbol": symbol}
-        
-        try:
-            async with session.get(url, params=params, headers=headers) as response:
-                logger.debug(f"Coinglass liq response for {asset}: status={response.status}")
-                
-                if response.status == 200:
-                    data = await response.json()
-                    if data.get("success") and data.get("data"):
-                        liq_data = data["data"]
-                        
-                        long_total = float(liq_data.get("longLiquidationUsd", liq_data.get("buyVolUsd", 0)))
-                        short_total = float(liq_data.get("shortLiquidationUsd", liq_data.get("sellVolUsd", 0)))
-                        
-                        if long_total > 0 or short_total > 0:
-                            logger.info(f"Coinglass liqs for {asset}: Long ${long_total/1e6:.1f}M, Short ${short_total/1e6:.1f}M")
-                            return {
-                                "long_24h": long_total,
-                                "short_24h": short_total,
-                                "total_24h": long_total + short_total,
-                            }
-                    
-                    # Try alternate format
-                    if data.get("code") == "0" and data.get("data"):
-                        liq_list = data["data"]
-                        if isinstance(liq_list, list):
-                            long_total = sum(float(l.get("longLiquidationUsd", 0)) for l in liq_list)
-                            short_total = sum(float(l.get("shortLiquidationUsd", 0)) for l in liq_list)
-                            
-                            if long_total > 0 or short_total > 0:
-                                logger.info(f"Coinglass liqs (alt) for {asset}: L${long_total/1e6:.1f}M S${short_total/1e6:.1f}M")
-                                return {
-                                    "long_24h": long_total,
-                                    "short_24h": short_total,
-                                    "total_24h": long_total + short_total,
-                                }
-        except Exception as e:
-            logger.debug(f"Coinglass liquidations error: {e}")
-        
-        # Try 24h aggregated endpoint
-        try:
-            url2 = "https://open-api-v3.coinglass.com/api/futures/liquidation/info"
-            async with session.get(url2, params={"symbol": symbol}, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if data.get("data"):
-                        liq = data["data"]
-                        long_24h = float(liq.get("h24LongLiquidationUsd", liq.get("totalLongLiquidationUsd", 0)))
-                        short_24h = float(liq.get("h24ShortLiquidationUsd", liq.get("totalShortLiquidationUsd", 0)))
-                        if long_24h > 0 or short_24h > 0:
-                            logger.info(f"Coinglass 24h liqs for {asset}: L${long_24h/1e6:.1f}M S${short_24h/1e6:.1f}M")
-                            return {"long_24h": long_24h, "short_24h": short_24h, "total_24h": long_24h + short_24h}
-        except Exception as e:
-            logger.debug(f"Coinglass liq info error: {e}")
-        
-        # Return estimated data based on volatility
-        return await self._estimate_liquidations(asset)
-    
-    async def _fetch_coinglass_funding_rates(self, asset: str) -> Optional[Dict]:
-        """Fetch aggregated funding rates from Coinglass."""
-        session = await self._get_session()
-        symbol = self.SYMBOL_MAP["coinglass"].get(asset, asset)
-        
-        url = f"https://open-api-v3.coinglass.com/api/futures/fundingRate"
-        params = {"symbol": symbol}
-        
-        headers = {}
-        if settings.coinglass_api_key:
-            headers["coinglassSecret"] = settings.coinglass_api_key
-        
-        try:
-            async with session.get(url, params=params, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if data.get("code") == "0" and data.get("data"):
-                        rates = data["data"]
-                        if rates:
-                            # Average across exchanges
-                            avg_rate = sum(float(r.get("rate", 0)) for r in rates) / len(rates)
-                            logger.debug(f"Coinglass avg funding for {asset}: {avg_rate:.6f}")
-                            return {"average": avg_rate, "exchanges": rates}
-        except Exception as e:
-            logger.debug(f"Coinglass funding error: {e}")
+            logger.debug(f"MEXC funding error: {e}")
         
         return None
     
     async def _estimate_liquidations(self, asset: str) -> Optional[Dict]:
         """Estimate liquidations based on price volatility."""
-        # Get recent volatility
         klines = await self._fetch_coinbase_candles(asset, "1h", 24)
         if not klines:
             return None
@@ -584,13 +489,20 @@ class DataService:
         if volatility is None:
             return None
         
-        # Rough estimate: higher vol = more liquidations
-        # Base estimates scaled by volatility
+        # Rough estimate based on market cap and volatility
         price = float(klines[-1]["close"])
-        base_liq = price * 1000000  # $1M base per $1 of price
-        vol_multiplier = volatility / 0.02  # Normalize to 2% vol
         
-        estimated_total = base_liq * vol_multiplier * 0.1
+        # Base liquidation estimates by asset (typical 24h values in millions USD)
+        base_liq = {
+            "BTC": 150_000_000,  # $150M base
+            "ETH": 80_000_000,   # $80M base
+            "SOL": 30_000_000,   # $30M base
+            "BNB": 20_000_000,   # $20M base
+        }.get(asset, 10_000_000)
+        
+        # Scale by volatility (higher vol = more liquidations)
+        vol_multiplier = volatility / 0.02  # Normalize to 2% vol
+        estimated_total = base_liq * max(0.5, min(3.0, vol_multiplier))
         
         return {
             "long_24h": estimated_total * 0.5,

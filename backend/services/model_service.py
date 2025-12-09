@@ -59,7 +59,7 @@ class ModelService:
     async def predict(
         self,
         asset: str,
-        horizon_hours: int,
+        horizon_minutes: int,
         market_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Generate prediction for an asset."""
@@ -75,12 +75,12 @@ class ModelService:
         else:
             # Fallback: simple momentum-based prediction
             p_up = self._fallback_direction(market_data)
-            expected_move = self._fallback_magnitude(market_data)
+            expected_move = self._fallback_magnitude(market_data, horizon_minutes)
         
         p_down = 1.0 - p_up
         
         # Estimate volatility
-        volatility = self._estimate_volatility(market_data, horizon_hours)
+        volatility = self._estimate_volatility(market_data, horizon_minutes)
         
         # Detect regime
         regime = self._detect_regime(market_data, p_up, volatility)
@@ -94,14 +94,14 @@ class ModelService:
             current_price=current_price,
             expected_return=expected_move,
             volatility=volatility,
-            horizon_hours=horizon_hours,
+            horizon_minutes=horizon_minutes,
             regime=regime
         )
         
         return {
             "asset": asset,
             "timestamp": timestamp,
-            "horizon_hours": horizon_hours,
+            "horizon_minutes": horizon_minutes,
             "p_up": round(p_up, 4),
             "p_down": round(p_down, 4),
             "expected_move": round(expected_move, 6),
@@ -317,25 +317,28 @@ class ModelService:
         p_up = momentum + funding_signal * 0.1
         return max(0.3, min(0.7, p_up))  # Clamp between 0.3 and 0.7
     
-    def _fallback_magnitude(self, market_data: Dict[str, Any]) -> float:
-        """Simple magnitude prediction."""
+    def _fallback_magnitude(self, market_data: Dict[str, Any], horizon_minutes: int = 5) -> float:
+        """Simple magnitude prediction scaled for minute horizons."""
         volatility = market_data.get("volatility_1h", 0.02) or 0.02
         returns_1h = market_data.get("returns_1h", 0) or 0
         
+        # Scale volatility for minute horizon (sqrt of time)
+        minute_vol = volatility * np.sqrt(horizon_minutes / 60)
+        
         # Expected move is fraction of volatility in direction of momentum
         direction = 1 if returns_1h > 0 else -1
-        return direction * volatility * 0.5
+        return direction * minute_vol * 0.3
     
     def _estimate_volatility(
         self, 
         market_data: Dict[str, Any], 
-        horizon_hours: int
+        horizon_minutes: int
     ) -> float:
-        """Estimate volatility for horizon."""
+        """Estimate volatility for minute horizon."""
         base_vol = market_data.get("volatility_1h", 0.02) or 0.02
         
-        # Scale by square root of time
-        horizon_vol = base_vol * np.sqrt(horizon_hours)
+        # Scale by square root of time (convert minutes to hours)
+        horizon_vol = base_vol * np.sqrt(horizon_minutes / 60)
         
         return horizon_vol
     
@@ -390,10 +393,10 @@ class ModelService:
         current_price: float,
         expected_return: float,
         volatility: float,
-        horizon_hours: int,
+        horizon_minutes: int,
         regime: str
     ) -> List[Dict]:
-        """Generate prediction cone using Monte Carlo."""
+        """Generate prediction cone for minute horizons."""
         # Regime adjustments
         vol_multiplier = {
             "low-vol": 0.7,
@@ -406,22 +409,24 @@ class ModelService:
         
         adjusted_vol = volatility * vol_multiplier
         
-        # Generate hourly steps
+        # Generate minute steps (up to horizon)
         cone = []
-        dt = 1.0 / 24  # 1 hour as fraction of day
+        steps = min(horizon_minutes + 1, 11)  # Cap at 11 points (0 to 10)
+        step_size = horizon_minutes / (steps - 1) if steps > 1 else 1
         
-        for h in range(horizon_hours + 1):
-            t = h * dt
+        for i in range(steps):
+            m = i * step_size
+            t = m / (24 * 60)  # Convert minutes to fraction of day
             sqrt_t = np.sqrt(t) if t > 0 else 0
             
             # Expected price at time t
-            drift = expected_return * t
+            drift = expected_return * (m / 60)  # Scale drift for minutes
             mid_price = current_price * np.exp(drift)
             
             # Volatility bands
-            vol_band = adjusted_vol * sqrt_t
+            vol_band = adjusted_vol * sqrt_t * 3  # Scale for visualization
             
-            timestamp = datetime.utcnow() + timedelta(hours=h)
+            timestamp = datetime.utcnow() + timedelta(minutes=m)
             
             cone.append({
                 "timestamp": timestamp,
