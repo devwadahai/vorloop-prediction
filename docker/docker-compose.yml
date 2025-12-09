@@ -1,0 +1,164 @@
+version: '3.8'
+
+services:
+  # Frontend React Application
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8001
+    depends_on:
+      - api
+    networks:
+      - crypto-network
+    restart: unless-stopped
+
+  # Backend FastAPI
+  api:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/crypto_prediction
+      - REDIS_URL=redis://redis:6379/0
+      - BINANCE_API_KEY=${BINANCE_API_KEY}
+      - BINANCE_API_SECRET=${BINANCE_API_SECRET}
+      - ENVIRONMENT=production
+    depends_on:
+      - db
+      - redis
+    networks:
+      - crypto-network
+    volumes:
+      - model-data:/app/models/trained
+    restart: unless-stopped
+
+  # WebSocket Server
+  ws:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    command: python -m uvicorn api.websocket:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    networks:
+      - crypto-network
+    restart: unless-stopped
+
+  # Celery Worker
+  worker:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    command: celery -A services.tasks worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/crypto_prediction
+      - REDIS_URL=redis://redis:6379/0
+      - BINANCE_API_KEY=${BINANCE_API_KEY}
+      - BINANCE_API_SECRET=${BINANCE_API_SECRET}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - crypto-network
+    volumes:
+      - model-data:/app/models/trained
+    restart: unless-stopped
+
+  # Celery Beat Scheduler
+  scheduler:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    command: celery -A services.tasks beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - worker
+    networks:
+      - crypto-network
+    restart: unless-stopped
+
+  # TimescaleDB (PostgreSQL with time-series extensions)
+  db:
+    image: timescale/timescaledb:latest-pg14
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=crypto_prediction
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - crypto-network
+    restart: unless-stopped
+
+  # Redis for caching and pub/sub
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - crypto-network
+    restart: unless-stopped
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - crypto-network
+    restart: unless-stopped
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - crypto-network
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  model-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  crypto-network:
+    driver: bridge
+

@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+.eggs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+coverage.xml
+*.cover
+
+# Build artifacts
+*.so
+*.dylib
+*.dll
+
+# Models (trained models can be large)
+backend/models/trained/*.pkl
+backend/models/trained/*.joblib
+
+# Database
+*.db
+*.sqlite
+
+# Docker
+docker/grafana/data/
+
+# Frontend build
+frontend/dist/
+frontend/.cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+*.bak
+*.tmp
+.cache/
+
