@@ -119,7 +119,7 @@ function MetricSection({
   chart,
 }: MetricSectionProps) {
   return (
-    <div className="p-3 flex flex-col">
+    <div className="p-3 flex flex-col h-full">
       <div className="text-xs text-terminal-muted mb-1">{title}</div>
       <div className={clsx('font-mono font-semibold text-lg', mainValueClass)}>
         {mainValue}
@@ -129,7 +129,7 @@ function MetricSection({
           {subLabel}: <span className={subValueClass}>{subValue}</span>
         </div>
       )}
-      {chart && <div className="flex-1 mt-2 min-h-0">{chart}</div>}
+      {chart && <div className="flex-1 mt-2 min-h-[50px]">{chart}</div>}
     </div>
   )
 }
@@ -141,47 +141,53 @@ interface MiniBarChartProps {
 }
 
 function MiniBarChart({ data, color, showZeroLine }: MiniBarChartProps) {
-  const max = Math.max(...data.map(Math.abs))
+  const max = Math.max(...data.map(Math.abs), 1)
+  const barCount = data.length || 1
   
   return (
-    <div className="h-full flex items-center gap-0.5 relative">
+    <div className="w-full h-full min-h-[40px] flex items-center relative">
       {showZeroLine && (
-        <div className="absolute left-0 right-0 top-1/2 h-px bg-terminal-border z-0" />
+        <div className="absolute left-0 right-0 top-1/2 h-px bg-terminal-border/50 z-0" />
       )}
-      {data.map((value, i) => {
-        const height = max > 0 ? Math.abs(value) / max : 0
-        const isPositive = value >= 0
-        
-        return (
-          <div
-            key={i}
-            className="flex-1 h-full flex flex-col justify-center relative"
-          >
-            {/* Positive bar (above center line) */}
-            {isPositive && (
-              <div 
-                className="w-full absolute bottom-1/2 rounded-t-sm"
-                style={{
-                  height: `${Math.max(height * 45, 2)}%`,
-                  backgroundColor: '#00d26a',
-                  opacity: 0.7 + (i / data.length) * 0.3,
-                }}
-              />
-            )}
-            {/* Negative bar (below center line) */}
-            {!isPositive && (
-              <div 
-                className="w-full absolute top-1/2 rounded-b-sm"
-                style={{
-                  height: `${Math.max(height * 45, 2)}%`,
-                  backgroundColor: '#ff4757',
-                  opacity: 0.7 + (i / data.length) * 0.3,
-                }}
-              />
-            )}
-          </div>
-        )
-      })}
+      <div className="w-full h-full flex items-center gap-px">
+        {data.map((value, i) => {
+          const heightPct = max > 0 ? (Math.abs(value) / max) * 100 : 0
+          const isPositive = value >= 0
+          
+          return (
+            <div
+              key={i}
+              className="flex-1 h-full flex flex-col justify-center"
+              style={{ minWidth: '2px' }}
+            >
+              <div className="relative h-full flex flex-col justify-center">
+                {/* Positive bar (above center) */}
+                {isPositive && (
+                  <div 
+                    className="absolute left-0 right-0 bottom-1/2 rounded-t-sm"
+                    style={{
+                      height: `${Math.max(heightPct * 0.45, 3)}%`,
+                      backgroundColor: '#00d26a',
+                      opacity: 0.6 + (i / barCount) * 0.4,
+                    }}
+                  />
+                )}
+                {/* Negative bar (below center) */}
+                {!isPositive && (
+                  <div 
+                    className="absolute left-0 right-0 top-1/2 rounded-b-sm"
+                    style={{
+                      height: `${Math.max(heightPct * 0.45, 3)}%`,
+                      backgroundColor: '#ff4757',
+                      opacity: 0.6 + (i / barCount) * 0.4,
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
