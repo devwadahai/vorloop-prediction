@@ -4,14 +4,15 @@ import { PredictionPanel } from './panels/PredictionPanel'
 import { MarketStructurePanel } from './panels/MarketStructurePanel'
 import { PredictionLogPanel } from './panels/PredictionLogPanel'
 import { FeeCalculatorPanel } from './panels/FeeCalculatorPanel'
+import { SimulationPanel } from './panels/SimulationPanel'
 import { Header } from './components/Header'
 import { useStore } from './state/store'
-import { BarChart3, Brain, Calculator } from 'lucide-react'
+import { BarChart3, Brain, Calculator, Zap } from 'lucide-react'
 import clsx from 'clsx'
 
 function App() {
   const { fetchMarketData, fetchPrediction, selectedAsset } = useStore()
-  const [sideTab, setSideTab] = useState<'prediction' | 'log' | 'fees'>('prediction')
+  const [sideTab, setSideTab] = useState<'prediction' | 'log' | 'fees' | 'sim'>('prediction')
 
   useEffect(() => {
     // Initial data fetch
@@ -88,6 +89,18 @@ function App() {
               <Calculator className="w-3.5 h-3.5" />
               Fees
             </button>
+            <button
+              onClick={() => setSideTab('sim')}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium transition-colors',
+                sideTab === 'sim'
+                  ? 'text-white border-b-2 border-accent bg-terminal-surface'
+                  : 'text-terminal-muted hover:text-white'
+              )}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              Sim
+            </button>
           </div>
           
           {/* Tab Content */}
@@ -95,6 +108,7 @@ function App() {
             {sideTab === 'prediction' && <PredictionPanel />}
             {sideTab === 'log' && <PredictionLogPanel />}
             {sideTab === 'fees' && <FeeCalculatorPanel />}
+            {sideTab === 'sim' && <SimulationPanel />}
           </div>
         </div>
       </main>
