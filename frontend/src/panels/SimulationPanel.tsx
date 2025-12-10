@@ -229,7 +229,7 @@ export function SimulationPanel() {
       setOpenPosition(updatedPosition)
       setSim(prev => ({
         ...prev,
-        currentBalance: prev.currentBalance - entryFee,
+        currentBalance: prev.currentBalance - effectiveSize - entryFee, // Deduct position size + fee
         trades: prev.trades.map(t => t.id === openPosition.id ? updatedPosition : t),
       }))
     } else {
@@ -252,7 +252,7 @@ export function SimulationPanel() {
       setOpenPosition(trade)
       setSim(prev => ({
         ...prev,
-        currentBalance: prev.currentBalance - entryFee,
+        currentBalance: prev.currentBalance - effectiveSize - entryFee, // Deduct position size + fee
         trades: [...prev.trades, trade],
         isRunning: true,
         startTime: prev.startTime || new Date(),
@@ -272,6 +272,9 @@ export function SimulationPanel() {
     const netPnl = grossPnl - exitFee
     const totalFees = openPosition.fees + exitFee
     
+    // Calculate what we get back: original size + gross P&L - exit fee
+    const returnAmount = openPosition.size + grossPnl - exitFee
+    
     const closedTrade: Trade = {
       ...openPosition,
       exitPrice: currentPrice,
@@ -284,7 +287,7 @@ export function SimulationPanel() {
     
     setSim(prev => ({
       ...prev,
-      currentBalance: prev.currentBalance + openPosition.size + netPnl - exitFee,
+      currentBalance: prev.currentBalance + returnAmount,
       trades: prev.trades.map(t => t.id === openPosition.id ? closedTrade : t),
     }))
     
