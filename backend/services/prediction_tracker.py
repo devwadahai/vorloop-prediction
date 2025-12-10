@@ -144,9 +144,15 @@ class PredictionTracker:
         to_validate = []
         
         for pred_id, pred in list(self.pending_validations.items()):
-            expiry = pred.timestamp + timedelta(minutes=pred.horizon_minutes)
-            if now >= expiry:
-                to_validate.append(pred)
+            try:
+                # Handle timezone-aware timestamps by removing tzinfo for comparison
+                pred_ts = pred.timestamp.replace(tzinfo=None) if pred.timestamp.tzinfo else pred.timestamp
+                expiry = pred_ts + timedelta(minutes=pred.horizon_minutes)
+                if now >= expiry:
+                    to_validate.append(pred)
+            except Exception as e:
+                logger.warning(f"Error checking prediction {pred_id}: {e}")
+                continue
         
         for pred in to_validate:
             await self._validate_prediction(pred)
