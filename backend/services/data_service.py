@@ -199,16 +199,17 @@ class DataService:
         funding_data = deriv.get("funding_rate", {})
         liq_data = deriv.get("liquidations", {})
         
-        # Calculate CVD (cumulative volume delta) in USD
+        # Calculate per-candle volume delta in USD (for chart display)
+        # Also track cumulative for the final CVD value
         cvd_cumulative = 0.0
-        cvd_values = []
+        delta_values = []  # Per-candle delta for visualization
         for c in candles:
             # Direction: +1 if bullish candle, -1 if bearish
             direction = 1 if c["close"] >= c["open"] else -1
             # Volume delta in USD
             delta_usd = c["volume"] * c["close"] * direction
             cvd_cumulative += delta_usd
-            cvd_values.append(cvd_cumulative)
+            delta_values.append(delta_usd)  # Store per-candle delta, not cumulative
         
         # Build market structure with derivatives
         market_structure = []
@@ -222,7 +223,7 @@ class DataService:
                 "oi_change_pct": oi_data.get("change_24h") if is_recent and oi_data else None,
                 "long_liquidations": liq_data.get("long_24h") / 24 if is_recent and liq_data and liq_data.get("long_24h") else None,
                 "short_liquidations": liq_data.get("short_24h") / 24 if is_recent and liq_data and liq_data.get("short_24h") else None,
-                "cvd": cvd_values[i],
+                "cvd": delta_values[i],  # Per-candle delta for chart visualization
             }
             market_structure.append(ms)
         

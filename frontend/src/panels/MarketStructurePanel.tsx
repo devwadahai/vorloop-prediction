@@ -144,9 +144,9 @@ function MiniBarChart({ data, color, showZeroLine }: MiniBarChartProps) {
   const max = Math.max(...data.map(Math.abs))
   
   return (
-    <div className="h-full flex items-end gap-0.5 relative">
+    <div className="h-full flex items-center gap-0.5 relative">
       {showZeroLine && (
-        <div className="absolute left-0 right-0 top-1/2 h-px bg-terminal-border" />
+        <div className="absolute left-0 right-0 top-1/2 h-px bg-terminal-border z-0" />
       )}
       {data.map((value, i) => {
         const height = max > 0 ? Math.abs(value) / max : 0
@@ -155,20 +155,30 @@ function MiniBarChart({ data, color, showZeroLine }: MiniBarChartProps) {
         return (
           <div
             key={i}
-            className="flex-1 flex items-center"
-            style={{ height: '100%' }}
+            className="flex-1 h-full flex flex-col justify-center relative"
           >
-            <div
-              className={clsx(
-                'w-full rounded-sm',
-                isPositive ? 'self-end' : 'self-start'
-              )}
-              style={{
-                height: `${Math.max(height * 50, 2)}%`,
-                backgroundColor: isPositive ? '#00d26a' : '#ff4757',
-                opacity: 0.6 + (i / data.length) * 0.4,
-              }}
-            />
+            {/* Positive bar (above center line) */}
+            {isPositive && (
+              <div 
+                className="w-full absolute bottom-1/2 rounded-t-sm"
+                style={{
+                  height: `${Math.max(height * 45, 2)}%`,
+                  backgroundColor: '#00d26a',
+                  opacity: 0.7 + (i / data.length) * 0.3,
+                }}
+              />
+            )}
+            {/* Negative bar (below center line) */}
+            {!isPositive && (
+              <div 
+                className="w-full absolute top-1/2 rounded-b-sm"
+                style={{
+                  height: `${Math.max(height * 45, 2)}%`,
+                  backgroundColor: '#ff4757',
+                  opacity: 0.7 + (i / data.length) * 0.3,
+                }}
+              />
+            )}
           </div>
         )
       })}
