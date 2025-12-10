@@ -37,7 +37,7 @@ export function MarketStructurePanel() {
   }
   
   return (
-    <div className="h-full bg-terminal-surface rounded-xl border border-terminal-border overflow-hidden">
+    <div className="h-full min-h-[140px] bg-terminal-surface rounded-xl border border-terminal-border overflow-hidden">
       <div className="h-full grid grid-cols-4 divide-x divide-terminal-border">
         {/* Funding Rate */}
         <MetricSection
@@ -119,7 +119,7 @@ function MetricSection({
   chart,
 }: MetricSectionProps) {
   return (
-    <div className="p-3 flex flex-col h-full">
+    <div className="p-3 flex flex-col">
       <div className="text-xs text-terminal-muted mb-1">{title}</div>
       <div className={clsx('font-mono font-semibold text-lg', mainValueClass)}>
         {mainValue}
@@ -129,7 +129,7 @@ function MetricSection({
           {subLabel}: <span className={subValueClass}>{subValue}</span>
         </div>
       )}
-      {chart && <div className="flex-1 mt-2 min-h-[50px]">{chart}</div>}
+      {chart && <div className="mt-2 h-[60px]">{chart}</div>}
     </div>
   )
 }
@@ -145,45 +145,46 @@ function MiniBarChart({ data, color, showZeroLine }: MiniBarChartProps) {
   const barCount = data.length || 1
   
   return (
-    <div className="w-full h-full min-h-[40px] flex items-center relative">
+    <div className="w-full h-full relative" style={{ minHeight: '60px' }}>
       {showZeroLine && (
         <div className="absolute left-0 right-0 top-1/2 h-px bg-terminal-border/50 z-0" />
       )}
-      <div className="w-full h-full flex items-center gap-px">
+      <div className="absolute inset-0 flex items-center gap-px">
         {data.map((value, i) => {
           const heightPct = max > 0 ? (Math.abs(value) / max) * 100 : 0
           const isPositive = value >= 0
+          const barHeight = Math.max(heightPct * 0.45, 4)
           
           return (
             <div
               key={i}
-              className="flex-1 h-full flex flex-col justify-center"
-              style={{ minWidth: '2px' }}
+              className="flex-1 h-full relative"
+              style={{ minWidth: '3px' }}
             >
-              <div className="relative h-full flex flex-col justify-center">
-                {/* Positive bar (above center) */}
-                {isPositive && (
-                  <div 
-                    className="absolute left-0 right-0 bottom-1/2 rounded-t-sm"
-                    style={{
-                      height: `${Math.max(heightPct * 0.45, 3)}%`,
-                      backgroundColor: '#00d26a',
-                      opacity: 0.6 + (i / barCount) * 0.4,
-                    }}
-                  />
-                )}
-                {/* Negative bar (below center) */}
-                {!isPositive && (
-                  <div 
-                    className="absolute left-0 right-0 top-1/2 rounded-b-sm"
-                    style={{
-                      height: `${Math.max(heightPct * 0.45, 3)}%`,
-                      backgroundColor: '#ff4757',
-                      opacity: 0.6 + (i / barCount) * 0.4,
-                    }}
-                  />
-                )}
-              </div>
+              {/* Positive bar (above center) */}
+              {isPositive && (
+                <div 
+                  className="absolute left-0 right-0 rounded-t-sm"
+                  style={{
+                    bottom: '50%',
+                    height: `${barHeight}%`,
+                    backgroundColor: '#00d26a',
+                    opacity: 0.6 + (i / barCount) * 0.4,
+                  }}
+                />
+              )}
+              {/* Negative bar (below center) */}
+              {!isPositive && (
+                <div 
+                  className="absolute left-0 right-0 rounded-b-sm"
+                  style={{
+                    top: '50%',
+                    height: `${barHeight}%`,
+                    backgroundColor: '#ff4757',
+                    opacity: 0.6 + (i / barCount) * 0.4,
+                  }}
+                />
+              )}
             </div>
           )
         })}
@@ -212,16 +213,18 @@ function MiniAreaChart({ data, color }: MiniAreaChartProps) {
   const lineD = `M ${points.join(' L ')}`
   
   return (
-    <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={`gradient-${color}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={pathD} fill={`url(#gradient-${color})`} />
-      <path d={lineD} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-    </svg>
+    <div className="w-full h-full" style={{ minHeight: '60px' }}>
+      <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={`gradient-${color}`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={pathD} fill={`url(#gradient-${color})`} />
+        <path d={lineD} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
   )
 }
 
@@ -236,7 +239,7 @@ function LiquidationChart({ longLiq, shortLiq }: LiquidationChartProps) {
   const shortPct = total > 0 ? (shortLiq / total) * 100 : 50
   
   return (
-    <div className="h-full flex flex-col justify-center gap-2">
+    <div className="w-full flex flex-col justify-center gap-2" style={{ minHeight: '60px' }}>
       <div className="flex items-center gap-2">
         <span className="text-xs text-bear w-12">Longs</span>
         <div className="flex-1 h-3 bg-terminal-bg rounded-full overflow-hidden">
