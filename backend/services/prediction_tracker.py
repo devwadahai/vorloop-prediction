@@ -38,16 +38,16 @@ class PredictionRecord:
             'id': self.id,
             'asset': self.asset,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'horizon_minutes': self.horizon_minutes,
-            'entry_price': self.entry_price,
-            'p_up': self.p_up,
-            'p_down': self.p_down,
-            'expected_move': self.expected_move,
+            'horizon_minutes': int(self.horizon_minutes),
+            'entry_price': float(self.entry_price),
+            'p_up': float(self.p_up),
+            'p_down': float(self.p_down),
+            'expected_move': float(self.expected_move),
             'regime': self.regime,
             'confidence': self.confidence,
-            'exit_price': self.exit_price,
-            'actual_move': self.actual_move,
-            'prediction_correct': self.prediction_correct,
+            'exit_price': float(self.exit_price) if self.exit_price is not None else None,
+            'actual_move': float(self.actual_move) if self.actual_move is not None else None,
+            'prediction_correct': bool(self.prediction_correct) if self.prediction_correct is not None else None,
             'validated_at': self.validated_at.isoformat() if self.validated_at else None,
         }
 
@@ -55,9 +55,11 @@ class PredictionRecord:
 class PredictionTracker:
     """
     Tracks predictions and validates them after their horizon expires.
+    Persists history to disk so it survives restarts.
     """
     
     MAX_HISTORY = 500  # Keep last 500 predictions
+    HISTORY_FILE = Path("data/prediction_history.json")
     
     def __init__(self, data_service=None):
         self.data_service = data_service
@@ -74,6 +76,9 @@ class PredictionTracker:
             'medium': {'total': 0, 'correct': 0},
             'low': {'total': 0, 'correct': 0},
         }
+        
+        # Load history from disk
+        self._load_history()
     
     def log_prediction(
         self,
@@ -193,6 +198,9 @@ class PredictionTracker:
             # Remove from pending
             del self.pending_validations[pred.id]
             
+            # Save to disk
+            self._save_history()
+            
         except Exception as e:
             logger.error(f"Error validating prediction {pred.id}: {e}")
             del self.pending_validations[pred.id]
@@ -239,4 +247,70 @@ class PredictionTracker:
         pending = list(self.pending_validations.values())
         pending.sort(key=lambda x: x.timestamp, reverse=True)
         return [p.to_dict() for p in pending]
+    
+    def _load_history(self):
+        """Load prediction history from disk."""
+        try:
+            if self.HISTORY_FILE.exists():
+                with open(self.HISTORY_FILE, 'r') as f:
+                    data = json.load(f)
+                
+                # Restore stats
+                self.total_predictions = data.get('total_predictions', 0)
+                self.correct_predictions = data.get('correct_predictions', 0)
+                self.stats_by_confidence = data.get('stats_by_confidence', {
+                    'high': {'total': 0, 'correct': 0},
+                    'medium': {'total': 0, 'correct': 0},
+                    'low': {'total': 0, 'correct': 0},
+                })
+                
+                # Restore validated predictions
+                for p_dict in data.get('history', []):
+                    try:
+                        record = PredictionRecord(
+                            id=p_dict['id'],
+                            asset=p_dict['asset'],
+                            timestamp=datetime.fromisoformat(p_dict['timestamp']),
+                            horizon_minutes=p_dict['horizon_minutes'],
+                            entry_price=p_dict['entry_price'],
+                            p_up=p_dict['p_up'],
+                            p_down=p_dict['p_down'],
+                            expected_move=p_dict['expected_move'],
+                            regime=p_dict['regime'],
+                            confidence=p_dict['confidence'],
+                            exit_price=p_dict.get('exit_price'),
+                            actual_move=p_dict.get('actual_move'),
+                            prediction_correct=p_dict.get('prediction_correct'),
+                            validated_at=datetime.fromisoformat(p_dict['validated_at']) if p_dict.get('validated_at') else None,
+                        )
+                        self.predictions.append(record)
+                    except Exception as e:
+                        logger.warning(f"Failed to restore prediction: {e}")
+                
+                logger.info(f"📂 Loaded {len(self.predictions)} predictions from history (Accuracy: {self.total_predictions}/{self.correct_predictions})")
+        except Exception as e:
+            logger.warning(f"Could not load prediction history: {e}")
+    
+    def _save_history(self):
+        """Save prediction history to disk."""
+        try:
+            # Ensure directory exists
+            self.HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Get validated predictions only
+            validated = [p for p in self.predictions if p.validated_at is not None]
+            
+            data = {
+                'total_predictions': self.total_predictions,
+                'correct_predictions': self.correct_predictions,
+                'stats_by_confidence': self.stats_by_confidence,
+                'history': [p.to_dict() for p in validated[-100:]],  # Keep last 100
+                'saved_at': datetime.utcnow().isoformat(),
+            }
+            
+            with open(self.HISTORY_FILE, 'w') as f:
+                json.dump(data, f, indent=2)
+                
+        except Exception as e:
+            logger.warning(f"Could not save prediction history: {e}")
 
