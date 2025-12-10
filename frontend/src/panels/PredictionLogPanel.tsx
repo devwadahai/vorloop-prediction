@@ -217,10 +217,22 @@ function PredictionRow({ prediction, validated }: { prediction: PredictionRecord
   const actualUp = prediction.actual_move !== null ? prediction.actual_move > 0 : null
   const isCorrect = prediction.prediction_correct
 
-  const time = new Date(prediction.timestamp).toLocaleTimeString('en-US', {
-    hour: '2-digit',
+  // Format time in local timezone
+  const date = new Date(prediction.timestamp)
+  const time = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   })
+  
+  // Show relative time for recent predictions
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const relativeTime = diffMins < 1 ? 'just now' 
+    : diffMins < 60 ? `${diffMins}m ago`
+    : diffMins < 1440 ? `${Math.floor(diffMins / 60)}h ago`
+    : time
 
   return (
     <div className="p-3 hover:bg-terminal-border/20 transition-colors">
@@ -236,7 +248,9 @@ function PredictionRow({ prediction, validated }: { prediction: PredictionRecord
             <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
           )}
           <span className="font-mono font-medium">{prediction.asset}</span>
-          <span className="text-xs text-terminal-muted">{time}</span>
+          <span className="text-xs text-terminal-muted" title={date.toLocaleString()}>
+            {relativeTime}
+          </span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-terminal-border text-terminal-muted">
             {prediction.horizon_minutes}m
           </span>
