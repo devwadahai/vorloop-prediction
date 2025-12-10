@@ -54,6 +54,24 @@ export function PriceChart() {
         timeVisible: true,
         secondsVisible: false,
       },
+      localization: {
+        // Use browser's local timezone for time display
+        timeFormatter: (time: number) => {
+          const date = new Date(time * 1000)
+          return date.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: false,
+          })
+        },
+        dateFormatter: (time: number) => {
+          const date = new Date(time * 1000)
+          return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          })
+        },
+      },
       handleScroll: {
         mouseWheel: true,
         pressedMouseMove: true,
@@ -117,8 +135,15 @@ export function PriceChart() {
   useEffect(() => {
     if (!marketData?.candles || !candleSeriesRef.current || !volumeSeriesRef.current) return
     
+    // Helper to ensure timestamps are treated as UTC
+    const parseUtcTimestamp = (ts: string): number => {
+      // If timestamp doesn't have timezone info, treat as UTC
+      const utcTs = ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z'
+      return new Date(utcTs).getTime() / 1000
+    }
+    
     const candleData: CandlestickData[] = marketData.candles.map((candle) => ({
-      time: (new Date(candle.timestamp).getTime() / 1000) as Time,
+      time: parseUtcTimestamp(candle.timestamp) as Time,
       open: candle.open,
       high: candle.high,
       low: candle.low,
@@ -126,7 +151,7 @@ export function PriceChart() {
     }))
     
     const volumeData = marketData.candles.map((candle) => ({
-      time: (new Date(candle.timestamp).getTime() / 1000) as Time,
+      time: parseUtcTimestamp(candle.timestamp) as Time,
       value: candle.volume,
       color: candle.close >= candle.open 
         ? 'rgba(0, 210, 106, 0.3)' 
@@ -145,7 +170,9 @@ export function PriceChart() {
   // Get chart coordinates for prediction cone
   const getTimeToCoordinate = (timestamp: string): number | null => {
     if (!chartRef.current) return null
-    const time = new Date(timestamp).getTime() / 1000
+    // Ensure UTC parsing
+    const utcTs = timestamp.endsWith('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z'
+    const time = new Date(utcTs).getTime() / 1000
     return chartRef.current.timeScale().timeToCoordinate(time as Time)
   }
   

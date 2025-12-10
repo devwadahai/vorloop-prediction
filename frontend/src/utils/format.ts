@@ -58,21 +58,36 @@ export function formatPrice(value: number): string {
 }
 
 /**
- * Format a timestamp
+ * Format a timestamp (handles UTC timestamps from backend)
  */
 export function formatTime(timestamp: string | Date): string {
-  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp
+  let date: Date
+  if (typeof timestamp === 'string') {
+    // If no timezone info, treat as UTC
+    const utcTs = timestamp.endsWith('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z'
+    date = new Date(utcTs)
+  } else {
+    date = timestamp
+  }
   return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   })
 }
 
 /**
- * Format a date
+ * Format a date (handles UTC timestamps from backend)
  */
 export function formatDate(timestamp: string | Date): string {
-  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp
+  let date: Date
+  if (typeof timestamp === 'string') {
+    // If no timezone info, treat as UTC
+    const utcTs = timestamp.endsWith('Z') || timestamp.includes('+') ? timestamp : timestamp + 'Z'
+    date = new Date(utcTs)
+  } else {
+    date = timestamp
+  }
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',

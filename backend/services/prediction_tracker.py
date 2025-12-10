@@ -34,10 +34,16 @@ class PredictionRecord:
     validated_at: Optional[datetime] = None
     
     def to_dict(self) -> dict:
+        # Add 'Z' suffix to indicate UTC timestamps for proper browser timezone conversion
+        def to_utc_iso(dt):
+            if dt is None:
+                return None
+            return dt.isoformat() + 'Z' if not dt.isoformat().endswith('Z') else dt.isoformat()
+        
         return {
             'id': self.id,
             'asset': self.asset,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'timestamp': to_utc_iso(self.timestamp),
             'horizon_minutes': int(self.horizon_minutes),
             'entry_price': float(self.entry_price),
             'p_up': float(self.p_up),
@@ -48,7 +54,7 @@ class PredictionRecord:
             'exit_price': float(self.exit_price) if self.exit_price is not None else None,
             'actual_move': float(self.actual_move) if self.actual_move is not None else None,
             'prediction_correct': bool(self.prediction_correct) if self.prediction_correct is not None else None,
-            'validated_at': self.validated_at.isoformat() if self.validated_at else None,
+            'validated_at': to_utc_iso(self.validated_at),
         }
 
 
