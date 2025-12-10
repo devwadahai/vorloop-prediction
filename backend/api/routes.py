@@ -169,6 +169,7 @@ async def predict(request: PredictionRequest, req: Request):
     try:
         model_service = req.app.state.model_service
         data_service = req.app.state.data_service
+        tracker = req.app.state.prediction_tracker
         
         # Get latest market data
         market_data = await data_service.get_latest_data(request.asset)
@@ -179,6 +180,18 @@ async def predict(request: PredictionRequest, req: Request):
             horizon_minutes=request.horizon_minutes,
             market_data=market_data
         )
+        
+        # Log prediction for tracking (only if horizon is reasonable)
+        if request.horizon_minutes <= 10:
+            tracker.log_prediction(
+                asset=request.asset,
+                entry_price=market_data["price"],
+                p_up=prediction["p_up"],
+                expected_move=prediction["expected_move"],
+                horizon_minutes=request.horizon_minutes,
+                regime=prediction["regime"],
+                confidence=prediction["confidence"],
+            )
         
         return prediction
         
@@ -307,5 +320,46 @@ async def model_info(req: Request):
         "features_count": model_service.features_count,
         "training_window_days": 90,
         "validation_metrics": model_service.validation_metrics,
+    }
+
+
+@router.get("/prediction-history")
+async def prediction_history(
+    req: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+    asset: Optional[str] = Query(default=None)
+):
+    """
+    Get validated prediction history with results.
+    Shows past predictions and whether they were correct.
+    """
+    tracker = req.app.state.prediction_tracker
+    history = tracker.get_history(limit=limit, asset=asset)
+    stats = tracker.get_stats()
+    
+    return {
+        "history": history,
+        "stats": stats,
+    }
+
+
+@router.get("/prediction-stats")
+async def prediction_stats(req: Request):
+    """
+    Get prediction accuracy statistics.
+    """
+    tracker = req.app.state.prediction_tracker
+    return tracker.get_stats()
+
+
+@router.get("/pending-predictions")
+async def pending_predictions(req: Request):
+    """
+    Get predictions waiting for validation.
+    """
+    tracker = req.app.state.prediction_tracker
+    return {
+        "pending": tracker.get_pending(),
+        "count": len(tracker.pending_validations),
     }
 

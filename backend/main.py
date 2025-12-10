@@ -15,6 +15,7 @@ from api.routes import router as api_router
 from api.websocket import router as ws_router
 from services.data_service import DataService
 from services.model_service import ModelService
+from services.prediction_tracker import PredictionTracker
 
 
 @asynccontextmanager
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Initialize services
     app.state.data_service = DataService()
     app.state.model_service = ModelService()
+    app.state.prediction_tracker = PredictionTracker(data_service=app.state.data_service)
     
     # Load models
     await app.state.model_service.load_models()
@@ -35,12 +37,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             app.state.data_service.start_streaming()
         )
     
+    # Start prediction validation loop
+    app.state.tracker_task = asyncio.create_task(
+        app.state.prediction_tracker.start_validation_loop()
+    )
+    
     logger.info("Application started successfully")
+    logger.info("📊 Prediction tracking enabled - validations will run automatically")
     
     yield
     
     # Cleanup
     logger.info("Shutting down...")
+    
+    # Stop tracker
+    app.state.prediction_tracker.stop()
+    if hasattr(app.state, 'tracker_task'):
+        app.state.tracker_task.cancel()
+        try:
+            await app.state.tracker_task
+        except asyncio.CancelledError:
+            pass
+    
     if hasattr(app.state, 'data_task'):
         app.state.data_task.cancel()
         try:
