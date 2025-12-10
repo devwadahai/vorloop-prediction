@@ -3,14 +3,15 @@ import { PriceChart } from './components/PriceChart'
 import { PredictionPanel } from './panels/PredictionPanel'
 import { MarketStructurePanel } from './panels/MarketStructurePanel'
 import { PredictionLogPanel } from './panels/PredictionLogPanel'
+import { FeeCalculatorPanel } from './panels/FeeCalculatorPanel'
 import { Header } from './components/Header'
 import { useStore } from './state/store'
-import { BarChart3, Brain } from 'lucide-react'
+import { BarChart3, Brain, Calculator } from 'lucide-react'
 import clsx from 'clsx'
 
 function App() {
   const { fetchMarketData, fetchPrediction, selectedAsset } = useStore()
-  const [sideTab, setSideTab] = useState<'prediction' | 'log'>('prediction')
+  const [sideTab, setSideTab] = useState<'prediction' | 'log' | 'fees'>('prediction')
 
   useEffect(() => {
     // Initial data fetch
@@ -54,36 +55,46 @@ function App() {
             <button
               onClick={() => setSideTab('prediction')}
               className={clsx(
-                'flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium transition-colors',
                 sideTab === 'prediction'
                   ? 'text-white border-b-2 border-accent bg-terminal-surface'
                   : 'text-terminal-muted hover:text-white'
               )}
             >
-              <Brain className="w-4 h-4" />
+              <Brain className="w-3.5 h-3.5" />
               Prediction
             </button>
             <button
               onClick={() => setSideTab('log')}
               className={clsx(
-                'flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium transition-colors',
                 sideTab === 'log'
                   ? 'text-white border-b-2 border-accent bg-terminal-surface'
                   : 'text-terminal-muted hover:text-white'
               )}
             >
-              <BarChart3 className="w-4 h-4" />
-              Accuracy Log
+              <BarChart3 className="w-3.5 h-3.5" />
+              Accuracy
+            </button>
+            <button
+              onClick={() => setSideTab('fees')}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium transition-colors',
+                sideTab === 'fees'
+                  ? 'text-white border-b-2 border-accent bg-terminal-surface'
+                  : 'text-terminal-muted hover:text-white'
+              )}
+            >
+              <Calculator className="w-3.5 h-3.5" />
+              Fees
             </button>
           </div>
           
           {/* Tab Content */}
           <div className="flex-1 overflow-hidden">
-            {sideTab === 'prediction' ? (
-              <PredictionPanel />
-            ) : (
-              <PredictionLogPanel />
-            )}
+            {sideTab === 'prediction' && <PredictionPanel />}
+            {sideTab === 'log' && <PredictionLogPanel />}
+            {sideTab === 'fees' && <FeeCalculatorPanel />}
           </div>
         </div>
       </main>
