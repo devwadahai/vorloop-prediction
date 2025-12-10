@@ -1,5 +1,5 @@
 {
-  "total_predictions": 33,
+  "total_predictions": 40,
   "correct_predictions": 20,
   "stats_by_confidence": {
     "high": {
@@ -7,11 +7,11 @@
       "correct": 0
     },
     "medium": {
-      "total": 12,
+      "total": 15,
       "correct": 9
     },
     "low": {
-      "total": 14,
+      "total": 18,
       "correct": 11
     }
   },
@@ -129,6 +129,54 @@
       "validated_at": "2025-12-10T02:15:19.805315+00:00Z"
     },
     {
+      "id": "BTC_021846_1",
+      "asset": "BTC",
+      "timestamp": "2025-12-10T02:18:46.042829Z",
+      "horizon_minutes": 5,
+      "entry_price": 92356.9,
+      "p_up": 0.4462,
+      "p_down": 0.5538000000000001,
+      "expected_move": -0.000373,
+      "regime": "trend-down",
+      "confidence": "medium",
+      "exit_price": 92578.1,
+      "actual_move": 0.0023950565685943513,
+      "prediction_correct": false,
+      "validated_at": "2025-12-10T02:23:51.686088Z"
+    },
+    {
+      "id": "BTC_021846_2",
+      "asset": "BTC",
+      "timestamp": "2025-12-10T02:18:46.376947Z",
+      "horizon_minutes": 5,
+      "entry_price": 92356.9,
+      "p_up": 0.4462,
+      "p_down": 0.5538000000000001,
+      "expected_move": -0.000373,
+      "regime": "trend-down",
+      "confidence": "medium",
+      "exit_price": 92578.1,
+      "actual_move": 0.0023950565685943513,
+      "prediction_correct": false,
+      "validated_at": "2025-12-10T02:23:51.857190Z"
+    },
+    {
+      "id": "BTC_021849_3",
+      "asset": "BTC",
+      "timestamp": "2025-12-10T02:18:49.508284Z",
+      "horizon_minutes": 3,
+      "entry_price": 92356.9,
+      "p_up": 0.4462,
+      "p_down": 0.5538000000000001,
+      "expected_move": -0.000289,
+      "regime": "trend-down",
+      "confidence": "medium",
+      "exit_price": 92492.01,
+      "actual_move": 0.0014629118127611536,
+      "prediction_correct": false,
+      "validated_at": "2025-12-10T02:21:51.266428Z"
+    },
+    {
       "id": "BTC_021850_4",
       "asset": "BTC",
       "timestamp": "2025-12-10T02:18:50.760609Z",
@@ -145,6 +193,38 @@
       "validated_at": "2025-12-10T02:20:00.319023Z"
     },
     {
+      "id": "BTC_021852_5",
+      "asset": "BTC",
+      "timestamp": "2025-12-10T02:18:52.917713Z",
+      "horizon_minutes": 3,
+      "entry_price": 92380.5,
+      "p_up": 0.4501,
+      "p_down": 0.5499,
+      "expected_move": -0.000291,
+      "regime": "ranging",
+      "confidence": "low",
+      "exit_price": 92517.34,
+      "actual_move": 0.0014812649855759225,
+      "prediction_correct": false,
+      "validated_at": "2025-12-10T02:22:01.475615Z"
+    },
+    {
+      "id": "BTC_021854_6",
+      "asset": "BTC",
+      "timestamp": "2025-12-10T02:18:54.171152Z",
+      "horizon_minutes": 5,
+      "entry_price": 92380.5,
+      "p_up": 0.4501,
+      "p_down": 0.5499,
+      "expected_move": -0.000375,
+      "regime": "ranging",
+      "confidence": "low",
+      "exit_price": 92594.25,
+      "actual_move": 0.002313799990257684,
+      "prediction_correct": false,
+      "validated_at": "2025-12-10T02:24:01.985344Z"
+    },
+    {
       "id": "BTC_021857_8",
       "asset": "BTC",
       "timestamp": "2025-12-10T02:18:57.724317Z",
@@ -159,6 +239,38 @@
       "actual_move": 0.0005917915577421453,
       "prediction_correct": false,
       "validated_at": "2025-12-10T02:20:00.524656Z"
+    },
+    {
+      "id": "BTC_021906_9",
+      "asset": "BTC",
+      "timestamp": "2025-12-10T02:19:06.124218Z",
+      "horizon_minutes": 5,
+      "entry_price": 92395.13,
+      "p_up": 0.4537,
+      "p_down": 0.5463,
+      "expected_move": -0.000378,
+      "regime": "ranging",
+      "confidence": "low",
+      "exit_price": 92593.46,
+      "actual_move": 0.002146541706256615,
+      "prediction_correct": false,
+      "validated_at": "2025-12-10T02:24:12.303818Z"
+    },
+    {
+      "id": "BTC_021906_10",
+      "asset": "BTC",
+      "timestamp": "2025-12-10T02:19:06.464529Z",
+      "horizon_minutes": 5,
+      "entry_price": 92395.13,
+      "p_up": 0.4537,
+      "p_down": 0.5463,
+      "expected_move": -0.000378,
+      "regime": "ranging",
+      "confidence": "low",
+      "exit_price": 92593.46,
+      "actual_move": 0.002146541706256615,
+      "prediction_correct": false,
+      "validated_at": "2025-12-10T02:24:12.458711Z"
     },
     {
       "id": "BTC_021927_11",
@@ -193,5 +305,5 @@
       "validated_at": "2025-12-10T02:20:50.977539Z"
     }
   ],
-  "saved_at": "2025-12-10T02:20:50.977911"
+  "saved_at": "2025-12-10T02:24:12.459025"
 }

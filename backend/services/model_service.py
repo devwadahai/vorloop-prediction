@@ -41,6 +41,9 @@ class ModelService:
         """
         Calculate calibration adjustments based on recent prediction performance.
         Returns (confidence_boost, direction_bias)
+        
+        Key insight: If high-confidence predictions are WRONG, we should REDUCE confidence.
+        If low-confidence predictions are more accurate, stay humble.
         """
         if not self._prediction_tracker:
             return (1.0, 0.0)
@@ -51,47 +54,58 @@ class ModelService:
         if total < 5:
             return (1.0, 0.0)  # Not enough data
         
-        accuracy = stats.get('accuracy_pct', 50) / 100.0
+        # Check accuracy by confidence level
+        by_conf = stats.get('by_confidence', {})
+        high_stats = by_conf.get('high', {})
+        medium_stats = by_conf.get('medium', {})
+        low_stats = by_conf.get('low', {})
         
-        # Get recent history to analyze errors
-        history = self._prediction_tracker.get_history(limit=20)
+        high_accuracy = high_stats.get('accuracy', 50) / 100.0 if high_stats.get('total', 0) > 0 else 0.5
+        medium_accuracy = medium_stats.get('accuracy', 50) / 100.0 if medium_stats.get('total', 0) > 0 else 0.5
+        low_accuracy = low_stats.get('accuracy', 50) / 100.0 if low_stats.get('total', 0) > 0 else 0.5
+        
+        # KEY FIX: If high confidence is LESS accurate than low, something is wrong
+        # We should REDUCE confidence, not boost it
+        if high_stats.get('total', 0) >= 3 and high_accuracy < 0.4:
+            # High confidence predictions are mostly WRONG - be more humble
+            confidence_boost = 0.7  # Reduce confidence significantly
+            logger.warning(f"⚠️ High-confidence predictions failing ({high_accuracy*100:.0f}%) - reducing confidence")
+        elif low_accuracy > high_accuracy + 0.15 and low_stats.get('total', 0) >= 5:
+            # Low confidence is more accurate - stay humble
+            confidence_boost = 0.85
+            logger.info(f"Low-confidence more accurate than high - staying humble")
+        elif medium_accuracy > 0.7 and medium_stats.get('total', 0) >= 5:
+            # Medium confidence is working well - slight boost
+            confidence_boost = 1.1
+        else:
+            # Default: no boost
+            confidence_boost = 1.0
+        
+        # Get recent history for direction bias
+        history = self._prediction_tracker.get_history(limit=30)
         
         if not history:
-            return (1.0, 0.0)
+            return (confidence_boost, 0.0)
         
-        # Calculate direction bias: if we predict down and it goes down more than expected
-        # we should be more confident in down predictions
+        # Analyze which direction predictions are more accurate
         up_predictions = [h for h in history if h.get('p_up', 0.5) > 0.5]
         down_predictions = [h for h in history if h.get('p_up', 0.5) <= 0.5]
         
-        # Check if we're under-confident
-        # If accuracy > 60%, boost confidence
-        if accuracy > 0.6:
-            # High accuracy = we can be more confident
-            confidence_boost = 1.0 + (accuracy - 0.5) * 0.5  # Up to 1.25x
-        elif accuracy < 0.4:
-            # Low accuracy = be less confident
-            confidence_boost = 0.8
-        else:
-            confidence_boost = 1.0
-        
-        # Check direction bias
-        # If we predict DOWN and actual is DOWN with big moves, lean more bearish
         down_correct = [h for h in down_predictions if h.get('prediction_correct')]
         up_correct = [h for h in up_predictions if h.get('prediction_correct')]
         
         down_accuracy = len(down_correct) / len(down_predictions) if down_predictions else 0.5
         up_accuracy = len(up_correct) / len(up_predictions) if up_predictions else 0.5
         
-        # If down predictions are more accurate, bias toward down
-        if down_accuracy > up_accuracy + 0.1:
-            direction_bias = -0.05 * (down_accuracy - up_accuracy)  # Reduce p_up
-        elif up_accuracy > down_accuracy + 0.1:
-            direction_bias = 0.05 * (up_accuracy - down_accuracy)  # Increase p_up
+        # Direction bias based on which direction is more accurate
+        if down_accuracy > up_accuracy + 0.15:
+            direction_bias = -0.08 * (down_accuracy - up_accuracy)  # Lean bearish
+        elif up_accuracy > down_accuracy + 0.15:
+            direction_bias = 0.08 * (up_accuracy - down_accuracy)  # Lean bullish
         else:
             direction_bias = 0.0
         
-        return (min(1.5, confidence_boost), max(-0.1, min(0.1, direction_bias)))
+        return (confidence_boost, max(-0.15, min(0.15, direction_bias)))
     
     async def load_models(self):
         """Load trained models from disk."""
