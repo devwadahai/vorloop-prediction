@@ -28,6 +28,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     app.state.model_service = ModelService()
     app.state.prediction_tracker = PredictionTracker(data_service=app.state.data_service)
     
+    # Connect model service to prediction tracker for adaptive calibration
+    app.state.model_service.set_prediction_tracker(app.state.prediction_tracker)
+    
     # Load models
     await app.state.model_service.load_models()
     

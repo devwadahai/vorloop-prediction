@@ -27,6 +27,71 @@ class ModelService:
         self.validation_metrics = {}
         
         self._models_loaded = False
+        
+        # Adaptive calibration based on recent performance
+        self._prediction_tracker = None  # Will be set from app.state
+        self._calibration_boost = 1.0  # Multiplier for confidence
+        self._direction_bias = 0.0  # Adjustment to p_up based on recent errors
+    
+    def set_prediction_tracker(self, tracker):
+        """Link to prediction tracker for adaptive calibration."""
+        self._prediction_tracker = tracker
+    
+    def _get_calibration_adjustment(self) -> tuple:
+        """
+        Calculate calibration adjustments based on recent prediction performance.
+        Returns (confidence_boost, direction_bias)
+        """
+        if not self._prediction_tracker:
+            return (1.0, 0.0)
+        
+        stats = self._prediction_tracker.get_stats()
+        total = stats.get('total_predictions', 0)
+        
+        if total < 5:
+            return (1.0, 0.0)  # Not enough data
+        
+        accuracy = stats.get('accuracy_pct', 50) / 100.0
+        
+        # Get recent history to analyze errors
+        history = self._prediction_tracker.get_history(limit=20)
+        
+        if not history:
+            return (1.0, 0.0)
+        
+        # Calculate direction bias: if we predict down and it goes down more than expected
+        # we should be more confident in down predictions
+        up_predictions = [h for h in history if h.get('p_up', 0.5) > 0.5]
+        down_predictions = [h for h in history if h.get('p_up', 0.5) <= 0.5]
+        
+        # Check if we're under-confident
+        # If accuracy > 60%, boost confidence
+        if accuracy > 0.6:
+            # High accuracy = we can be more confident
+            confidence_boost = 1.0 + (accuracy - 0.5) * 0.5  # Up to 1.25x
+        elif accuracy < 0.4:
+            # Low accuracy = be less confident
+            confidence_boost = 0.8
+        else:
+            confidence_boost = 1.0
+        
+        # Check direction bias
+        # If we predict DOWN and actual is DOWN with big moves, lean more bearish
+        down_correct = [h for h in down_predictions if h.get('prediction_correct')]
+        up_correct = [h for h in up_predictions if h.get('prediction_correct')]
+        
+        down_accuracy = len(down_correct) / len(down_predictions) if down_predictions else 0.5
+        up_accuracy = len(up_correct) / len(up_predictions) if up_predictions else 0.5
+        
+        # If down predictions are more accurate, bias toward down
+        if down_accuracy > up_accuracy + 0.1:
+            direction_bias = -0.05 * (down_accuracy - up_accuracy)  # Reduce p_up
+        elif up_accuracy > down_accuracy + 0.1:
+            direction_bias = 0.05 * (up_accuracy - down_accuracy)  # Increase p_up
+        else:
+            direction_bias = 0.0
+        
+        return (min(1.5, confidence_boost), max(-0.1, min(0.1, direction_bias)))
     
     async def load_models(self):
         """Load trained models from disk."""
@@ -76,6 +141,21 @@ class ModelService:
             # Fallback: simple momentum-based prediction
             p_up = self._fallback_direction(market_data)
             expected_move = self._fallback_magnitude(market_data, horizon_minutes)
+        
+        # Apply adaptive calibration based on recent performance
+        confidence_boost, direction_bias = self._get_calibration_adjustment()
+        
+        # Adjust p_up with direction bias (learned from recent accuracy)
+        p_up = max(0.15, min(0.85, p_up + direction_bias))
+        
+        # Amplify confidence if we've been accurate (push away from 50%)
+        if confidence_boost > 1.0:
+            # Push probability away from 50% based on boost
+            if p_up > 0.5:
+                p_up = 0.5 + (p_up - 0.5) * confidence_boost
+            else:
+                p_up = 0.5 - (0.5 - p_up) * confidence_boost
+            p_up = max(0.15, min(0.85, p_up))
         
         p_down = 1.0 - p_up
         
