@@ -226,7 +226,15 @@ class PredictionTracker:
         
         # Return most recent first, only validated ones
         validated = [p for p in history if p.validated_at is not None]
-        validated.sort(key=lambda x: x.timestamp, reverse=True)
+        
+        # Sort with timezone-safe comparison
+        def safe_timestamp(p):
+            ts = p.timestamp
+            if ts and ts.tzinfo:
+                return ts.replace(tzinfo=None)
+            return ts or datetime.min
+        
+        validated.sort(key=safe_timestamp, reverse=True)
         
         return [p.to_dict() for p in validated[:limit]]
     
@@ -257,7 +265,15 @@ class PredictionTracker:
     def get_pending(self) -> List[dict]:
         """Get predictions waiting for validation."""
         pending = list(self.pending_validations.values())
-        pending.sort(key=lambda x: x.timestamp, reverse=True)
+        
+        # Sort with timezone-safe comparison
+        def safe_timestamp(p):
+            ts = p.timestamp
+            if ts and ts.tzinfo:
+                return ts.replace(tzinfo=None)
+            return ts or datetime.min
+        
+        pending.sort(key=safe_timestamp, reverse=True)
         return [p.to_dict() for p in pending]
     
     def _load_history(self):
