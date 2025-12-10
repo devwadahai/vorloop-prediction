@@ -261,7 +261,7 @@ export function SimulationPanel() {
                 'text-xs',
                 prediction.p_up > 0.5 ? 'text-bull' : 'text-bear'
               )}>
-                Pred: {prediction.p_up > 0.5 ? '↑' : '↓'} {Math.max(prediction.p_up, prediction.p_down) * 100}%
+                Pred: {prediction.p_up > 0.5 ? '↑' : '↓'} {(Math.max(prediction.p_up, prediction.p_down) * 100).toFixed(0)}%
               </div>
             )}
           </div>
@@ -364,11 +364,12 @@ export function SimulationPanel() {
               )}
             >
               <TrendingUp className="w-5 h-5" />
-              LONG
+              {sim.market === 'spot' ? 'BUY' : 'LONG'}
             </button>
             <button
               onClick={() => openTrade('sell')}
-              disabled={!currentPrice || effectiveSize <= 0}
+              disabled={!currentPrice || effectiveSize <= 0 || sim.market === 'spot'}
+              title={sim.market === 'spot' ? 'Shorting not available in Spot trading' : ''}
               className={clsx(
                 'flex items-center justify-center gap-2 py-3 rounded font-semibold transition-all',
                 'bg-bear hover:bg-bear/80 text-white',
@@ -376,16 +377,32 @@ export function SimulationPanel() {
               )}
             >
               <TrendingDown className="w-5 h-5" />
-              SHORT
+              {sim.market === 'spot' ? 'SELL' : 'SHORT'}
             </button>
           </div>
-          {prediction && (
+          {sim.market === 'spot' && (
+            <div className="mt-2 p-2 rounded text-xs text-center bg-amber-400/10 text-amber-400">
+              ⚠️ Spot trading: Buy low, sell high. No shorting available.
+            </div>
+          )}
+          {prediction && sim.market === 'futures' && (
             <div className={clsx(
               'mt-2 p-2 rounded text-xs text-center',
               prediction.p_up > 0.5 ? 'bg-bull/10 text-bull' : 'bg-bear/10 text-bear'
             )}>
               💡 Prediction suggests: <strong>{prediction.p_up > 0.5 ? 'LONG' : 'SHORT'}</strong>
               {' '}({(Math.max(prediction.p_up, prediction.p_down) * 100).toFixed(0)}% confidence)
+            </div>
+          )}
+          {prediction && sim.market === 'spot' && (
+            <div className={clsx(
+              'mt-2 p-2 rounded text-xs text-center',
+              prediction.p_up > 0.5 ? 'bg-bull/10 text-bull' : 'bg-amber-400/10 text-amber-400'
+            )}>
+              {prediction.p_up > 0.5 
+                ? `💡 Good time to BUY (${(prediction.p_up * 100).toFixed(0)}% up probability)`
+                : `⏳ Wait for better entry (${(prediction.p_down * 100).toFixed(0)}% down probability)`
+              }
             </div>
           )}
         </div>
