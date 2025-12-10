@@ -304,18 +304,62 @@ class ModelService:
         return float(magnitude)
     
     def _fallback_direction(self, market_data: Dict[str, Any]) -> float:
-        """Simple momentum-based direction prediction."""
+        """
+        Multi-signal direction prediction using:
+        - Price momentum (strongest signal)
+        - CVD (volume delta) - buying/selling pressure
+        - Funding rate (contrarian)
+        - Open Interest changes
+        """
+        # Get all available signals
         returns_1h = market_data.get("returns_1h", 0) or 0
+        volatility = market_data.get("volatility_1h", 0.02) or 0.02
         funding = market_data.get("funding_rate", 0) or 0
+        cvd = market_data.get("cvd", 0) or 0
+        oi_change = market_data.get("oi_change_24h", 0) or 0
         
-        # Momentum signal
-        momentum = 0.5 + (returns_1h * 5)  # Scale returns
+        # Initialize score at neutral
+        score = 0.0
         
-        # Contrarian funding signal (high funding = potential reversal)
-        funding_signal = -funding * 100  # Contrarian
+        # 1. MOMENTUM SIGNAL (weight: 40%)
+        # Normalize returns by volatility for comparable signal strength
+        momentum_z = returns_1h / (volatility + 0.001)
+        momentum_signal = np.tanh(momentum_z * 0.5)  # Squash to [-1, 1]
+        score += momentum_signal * 0.40
         
-        p_up = momentum + funding_signal * 0.1
-        return max(0.3, min(0.7, p_up))  # Clamp between 0.3 and 0.7
+        # 2. CVD SIGNAL (weight: 25%)
+        # Positive CVD = buying pressure = bullish
+        if cvd != 0:
+            # Normalize CVD - typical range is -10M to +10M USD
+            cvd_normalized = cvd / 5_000_000  # $5M as baseline
+            cvd_signal = np.tanh(cvd_normalized)
+            score += cvd_signal * 0.25
+        
+        # 3. FUNDING RATE SIGNAL (weight: 20%)
+        # High positive funding = longs paying shorts = contrarian bearish
+        # High negative funding = shorts paying longs = contrarian bullish
+        if funding != 0:
+            # Funding typically ranges from -0.01 to +0.01 (1%)
+            funding_signal = -np.tanh(funding * 200)  # Contrarian
+            score += funding_signal * 0.20
+        
+        # 4. OI CHANGE SIGNAL (weight: 15%)
+        # Rising OI with momentum = trend continuation
+        # Falling OI = position unwinding
+        if oi_change != 0:
+            # OI change as percentage, typically -5% to +5%
+            oi_signal = np.tanh(oi_change * 10)
+            # Align with momentum direction
+            if returns_1h > 0:
+                score += oi_signal * 0.15
+            else:
+                score += -oi_signal * 0.15
+        
+        # Convert score [-1, 1] to probability [0.15, 0.85]
+        # Allow more extreme predictions but not 0% or 100%
+        p_up = 0.5 + (score * 0.35)
+        
+        return max(0.15, min(0.85, p_up))
     
     def _fallback_magnitude(self, market_data: Dict[str, Any], horizon_minutes: int = 5) -> float:
         """Simple magnitude prediction scaled for minute horizons."""
@@ -348,20 +392,29 @@ class ModelService:
         p_up: float,
         volatility: float
     ) -> str:
-        """Detect market regime."""
+        """Detect market regime based on multiple factors."""
         returns_1h = market_data.get("returns_1h", 0) or 0
         funding = market_data.get("funding_rate", 0) or 0
+        cvd = market_data.get("cvd", 0) or 0
+        
+        # Panic: Sharp drop with high volatility
+        if returns_1h < -0.02 and volatility > 0.03:
+            return "panic"
         
         # High volatility regime
-        if volatility > 0.05:
-            if returns_1h < -0.03:
-                return "panic"
+        if volatility > 0.04:
             return "high-vol"
         
-        # Trending regimes
-        if p_up > 0.6:
+        # Strong trending regimes (use actual probability)
+        if p_up > 0.65:
             return "trend-up"
-        elif p_up < 0.4:
+        elif p_up < 0.35:
+            return "trend-down"
+        
+        # Moderate trends
+        if p_up > 0.55 and returns_1h > 0:
+            return "trend-up"
+        elif p_up < 0.45 and returns_1h < 0:
             return "trend-down"
         
         # Ranging
@@ -373,17 +426,22 @@ class ModelService:
         volatility: float, 
         regime: str
     ) -> str:
-        """Calculate prediction confidence."""
-        # Base confidence from probability extremity
+        """Calculate prediction confidence based on signal strength."""
+        # How far from 50% is our prediction?
         prob_strength = abs(p_up - 0.5) * 2  # 0 to 1 scale
         
-        # Reduce confidence in high vol regimes
-        if regime in ["high-vol", "panic"]:
-            prob_strength *= 0.5
+        # Adjust for regime
+        if regime == "panic":
+            prob_strength *= 0.4  # Very uncertain in panic
+        elif regime == "high-vol":
+            prob_strength *= 0.6  # Uncertain in high vol
+        elif regime in ["trend-up", "trend-down"]:
+            prob_strength *= 1.2  # More confident in trends
         
-        if prob_strength > 0.3:
+        # Classify confidence
+        if prob_strength > 0.25:
             return "high"
-        elif prob_strength > 0.15:
+        elif prob_strength > 0.12:
             return "medium"
         else:
             return "low"
