@@ -145,12 +145,12 @@ export function SimulationPanel() {
     ? parseFloat(customSize) || 0 
     : (sim.currentBalance * positionSize / 100)
   
+  // Get current fee rate
+  const feeRate = FEES[sim.exchange][sim.market]
+  
   // Check if can afford trade
   const tradeCost = effectiveSize * (1 + feeRate)
   const canAfford = tradeCost <= sim.currentBalance && effectiveSize > 0
-  
-  // Get current fee rate
-  const feeRate = FEES[sim.exchange][sim.market]
   
   // Calculate stats
   const stats = useMemo(() => {
