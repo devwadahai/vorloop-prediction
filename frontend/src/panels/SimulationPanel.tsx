@@ -6,15 +6,23 @@ import {
 import { useStore } from '../state/store'
 import clsx from 'clsx'
 
+interface TradeEntry {
+  price: number
+  size: number
+  time: Date
+  fee: number
+}
+
 interface Trade {
   id: string
   type: 'buy' | 'sell'
-  entryPrice: number
-  entryTime: Date
+  entryPrice: number  // Average entry price
+  entryTime: Date     // First entry time
+  entries: TradeEntry[]  // All entries (for DCA tracking)
   exitPrice?: number
   exitTime?: Date
-  size: number  // USD value
-  fees: number
+  size: number  // Total USD value
+  fees: number  // Total fees
   pnl?: number
   pnlPct?: number
   status: 'open' | 'closed'
@@ -176,33 +184,70 @@ export function SimulationPanel() {
     }
   }, [sim.trades, sim.startingBalance])
   
-  // Open a position
+  // Open a position or add to existing
   const openTrade = (type: 'buy' | 'sell') => {
-    if (!currentPrice || openPosition) return
+    if (!currentPrice) return
     
-    const entryFee = effectiveSize * feeRate
-    const trade: Trade = {
-      id: `trade_${Date.now()}`,
-      type,
-      entryPrice: currentPrice,
-      entryTime: new Date(),
-      size: effectiveSize,
-      fees: entryFee,
-      status: 'open',
-      prediction: prediction ? {
-        direction: prediction.p_up > 0.5 ? 'up' : 'down',
-        confidence: Math.max(prediction.p_up, prediction.p_down) * 100
-      } : undefined
+    // If there's an open position of OPPOSITE type, don't allow
+    if (openPosition && openPosition.type !== type) {
+      alert(`Close your ${openPosition.type.toUpperCase()} position first before going ${type.toUpperCase()}`)
+      return
     }
     
-    setOpenPosition(trade)
-    setSim(prev => ({
-      ...prev,
-      currentBalance: prev.currentBalance - entryFee,
-      trades: [...prev.trades, trade],
-      isRunning: true,
-      startTime: prev.startTime || new Date(),
-    }))
+    const entryFee = effectiveSize * feeRate
+    const newEntry: TradeEntry = {
+      price: currentPrice,
+      size: effectiveSize,
+      time: new Date(),
+      fee: entryFee,
+    }
+    
+    if (openPosition && openPosition.type === type) {
+      // ADD TO EXISTING POSITION (DCA)
+      const newTotalSize = openPosition.size + effectiveSize
+      const newAvgEntry = (openPosition.entryPrice * openPosition.size + currentPrice * effectiveSize) / newTotalSize
+      const newTotalFees = openPosition.fees + entryFee
+      
+      const updatedPosition: Trade = {
+        ...openPosition,
+        entryPrice: newAvgEntry,
+        size: newTotalSize,
+        fees: newTotalFees,
+        entries: [...(openPosition.entries || []), newEntry],
+      }
+      
+      setOpenPosition(updatedPosition)
+      setSim(prev => ({
+        ...prev,
+        currentBalance: prev.currentBalance - entryFee,
+        trades: prev.trades.map(t => t.id === openPosition.id ? updatedPosition : t),
+      }))
+    } else {
+      // NEW POSITION
+      const trade: Trade = {
+        id: `trade_${Date.now()}`,
+        type,
+        entryPrice: currentPrice,
+        entryTime: new Date(),
+        entries: [newEntry],
+        size: effectiveSize,
+        fees: entryFee,
+        status: 'open',
+        prediction: prediction ? {
+          direction: prediction.p_up > 0.5 ? 'up' : 'down',
+          confidence: Math.max(prediction.p_up, prediction.p_down) * 100
+        } : undefined
+      }
+      
+      setOpenPosition(trade)
+      setSim(prev => ({
+        ...prev,
+        currentBalance: prev.currentBalance - entryFee,
+        trades: [...prev.trades, trade],
+        isRunning: true,
+        startTime: prev.startTime || new Date(),
+      }))
+    }
   }
   
   // Close position
@@ -387,6 +432,7 @@ export function SimulationPanel() {
         const netPnl = currentPnl - exitFee
         const netPnlPct = netPnl / openPosition.size * 100
         const breakeven = (totalFees / openPosition.size) * 100
+        const numEntries = openPosition.entries?.length || 1
         
         return (
           <div className={clsx(
@@ -402,8 +448,13 @@ export function SimulationPanel() {
                 )}
                 <span className="font-semibold uppercase">{openPosition.type}</span>
                 <span className="text-terminal-muted text-sm">
-                  @ ${openPosition.entryPrice.toFixed(2)}
+                  avg ${openPosition.entryPrice.toFixed(2)}
                 </span>
+                {numEntries > 1 && (
+                  <span className="text-xs px-1.5 py-0.5 bg-accent/20 text-accent rounded">
+                    {numEntries} entries
+                  </span>
+                )}
               </div>
               <button
                 onClick={closePosition}
@@ -421,7 +472,7 @@ export function SimulationPanel() {
             {/* Position Details */}
             <div className="grid grid-cols-2 gap-2 text-sm mb-3">
               <div>
-                <div className="text-xs text-terminal-muted">Position Size</div>
+                <div className="text-xs text-terminal-muted">Total Position</div>
                 <div className="font-mono">{formatUsd(openPosition.size)}</div>
               </div>
               <div>
@@ -429,6 +480,23 @@ export function SimulationPanel() {
                 <div className="font-mono">${currentPrice.toFixed(2)}</div>
               </div>
             </div>
+            
+            {/* DCA Entries */}
+            {openPosition.entries && openPosition.entries.length > 1 && (
+              <div className="mb-3 p-2 bg-terminal-bg/50 rounded">
+                <div className="text-xs text-terminal-muted mb-1">DCA Entries:</div>
+                <div className="space-y-1 max-h-20 overflow-y-auto">
+                  {openPosition.entries.map((entry, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="text-terminal-muted">
+                        #{i + 1}: ${entry.price.toFixed(2)}
+                      </span>
+                      <span className="font-mono">{formatUsd(entry.size)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             
             {/* P&L Breakdown */}
             <div className="bg-terminal-bg/50 rounded p-2 space-y-1 text-xs">
@@ -439,7 +507,7 @@ export function SimulationPanel() {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-terminal-muted">Entry Fee (paid):</span>
+                <span className="text-terminal-muted">Entry Fees ({numEntries}x):</span>
                 <span className="font-mono text-amber-400">-{formatUsd(openPosition.fees)}</span>
               </div>
               <div className="flex justify-between">
@@ -451,6 +519,23 @@ export function SimulationPanel() {
                 <span className={clsx('font-mono font-bold', netPnl >= 0 ? 'text-bull' : 'text-bear')}>
                   {formatUsd(netPnl)} ({formatPct(netPnlPct)})
                 </span>
+              </div>
+            </div>
+            
+            {/* Add More Button */}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => openTrade(openPosition.type)}
+                className={clsx(
+                  'flex items-center justify-center gap-1 py-2 rounded text-sm font-medium transition-colors',
+                  'bg-terminal-bg hover:bg-terminal-border border border-terminal-border'
+                )}
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                Add {formatUsd(effectiveSize)}
+              </button>
+              <div className="text-xs text-terminal-muted self-center text-center">
+                New avg: ${((openPosition.entryPrice * openPosition.size + currentPrice * effectiveSize) / (openPosition.size + effectiveSize)).toFixed(2)}
               </div>
             </div>
             
