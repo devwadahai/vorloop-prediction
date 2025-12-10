@@ -145,6 +145,10 @@ export function SimulationPanel() {
     ? parseFloat(customSize) || 0 
     : (sim.currentBalance * positionSize / 100)
   
+  // Check if can afford trade
+  const tradeCost = effectiveSize * (1 + feeRate)
+  const canAfford = tradeCost <= sim.currentBalance && effectiveSize > 0
+  
   // Get current fee rate
   const feeRate = FEES[sim.exchange][sim.market]
   
@@ -188,13 +192,19 @@ export function SimulationPanel() {
   const openTrade = (type: 'buy' | 'sell') => {
     if (!currentPrice) return
     
+    // Check if enough balance
+    const entryFee = effectiveSize * feeRate
+    const totalCost = effectiveSize + entryFee
+    if (totalCost > sim.currentBalance) {
+      alert(`Insufficient balance! Need ${formatUsd(totalCost)} but only have ${formatUsd(sim.currentBalance)}`)
+      return
+    }
+    
     // If there's an open position of OPPOSITE type, don't allow
     if (openPosition && openPosition.type !== type) {
       alert(`Close your ${openPosition.type.toUpperCase()} position first before going ${type.toUpperCase()}`)
       return
     }
-    
-    const entryFee = effectiveSize * feeRate
     const newEntry: TradeEntry = {
       price: currentPrice,
       size: effectiveSize,
@@ -526,16 +536,22 @@ export function SimulationPanel() {
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
                 onClick={() => openTrade(openPosition.type)}
+                disabled={!canAfford}
                 className={clsx(
                   'flex items-center justify-center gap-1 py-2 rounded text-sm font-medium transition-colors',
-                  'bg-terminal-bg hover:bg-terminal-border border border-terminal-border'
+                  canAfford 
+                    ? 'bg-terminal-bg hover:bg-terminal-border border border-terminal-border'
+                    : 'bg-terminal-bg/50 border border-terminal-border/50 opacity-50 cursor-not-allowed'
                 )}
               >
                 <TrendingUp className="w-3.5 h-3.5" />
                 Add {formatUsd(effectiveSize)}
               </button>
               <div className="text-xs text-terminal-muted self-center text-center">
-                New avg: ${((openPosition.entryPrice * openPosition.size + currentPrice * effectiveSize) / (openPosition.size + effectiveSize)).toFixed(2)}
+                {canAfford 
+                  ? `New avg: $${((openPosition.entryPrice * openPosition.size + currentPrice * effectiveSize) / (openPosition.size + effectiveSize)).toFixed(2)}`
+                  : 'Insufficient balance'
+                }
               </div>
             </div>
             
@@ -565,7 +581,7 @@ export function SimulationPanel() {
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => openTrade('buy')}
-              disabled={!currentPrice || effectiveSize <= 0}
+              disabled={!currentPrice || !canAfford}
               className={clsx(
                 'flex items-center justify-center gap-2 py-3 rounded font-semibold transition-all',
                 'bg-bull hover:bg-bull/80 text-white',
@@ -577,7 +593,7 @@ export function SimulationPanel() {
             </button>
             <button
               onClick={() => openTrade('sell')}
-              disabled={!currentPrice || effectiveSize <= 0 || sim.market === 'spot'}
+              disabled={!currentPrice || !canAfford || sim.market === 'spot'}
               title={sim.market === 'spot' ? 'Shorting not available in Spot trading' : ''}
               className={clsx(
                 'flex items-center justify-center gap-2 py-3 rounded font-semibold transition-all',
@@ -589,6 +605,11 @@ export function SimulationPanel() {
               {sim.market === 'spot' ? 'SELL' : 'SHORT'}
             </button>
           </div>
+          {!canAfford && effectiveSize > 0 && (
+            <div className="mt-2 p-2 bg-bear/10 rounded text-xs text-bear text-center">
+              ⚠️ Insufficient balance! Need {formatUsd(tradeCost)}, have {formatUsd(sim.currentBalance)}
+            </div>
+          )}
           {sim.market === 'spot' && (
             <div className="mt-2 p-2 rounded text-xs text-center bg-amber-400/10 text-amber-400">
               ⚠️ Spot trading: Buy low, sell high. No shorting available.
