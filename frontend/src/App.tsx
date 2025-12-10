@@ -1,12 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { PriceChart } from './components/PriceChart'
 import { PredictionPanel } from './panels/PredictionPanel'
 import { MarketStructurePanel } from './panels/MarketStructurePanel'
+import { PredictionLogPanel } from './panels/PredictionLogPanel'
 import { Header } from './components/Header'
 import { useStore } from './state/store'
+import { BarChart3, Brain } from 'lucide-react'
+import clsx from 'clsx'
 
 function App() {
   const { fetchMarketData, fetchPrediction, selectedAsset } = useStore()
+  const [sideTab, setSideTab] = useState<'prediction' | 'log'>('prediction')
 
   useEffect(() => {
     // Initial data fetch
@@ -43,9 +47,44 @@ function App() {
           </div>
         </div>
         
-        {/* Side Panel - Predictions */}
-        <div className="w-80 border-l border-terminal-border">
-          <PredictionPanel />
+        {/* Side Panel */}
+        <div className="w-96 border-l border-terminal-border flex flex-col">
+          {/* Tab Switcher */}
+          <div className="flex border-b border-terminal-border bg-terminal-surface/50">
+            <button
+              onClick={() => setSideTab('prediction')}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
+                sideTab === 'prediction'
+                  ? 'text-white border-b-2 border-accent bg-terminal-surface'
+                  : 'text-terminal-muted hover:text-white'
+              )}
+            >
+              <Brain className="w-4 h-4" />
+              Prediction
+            </button>
+            <button
+              onClick={() => setSideTab('log')}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
+                sideTab === 'log'
+                  ? 'text-white border-b-2 border-accent bg-terminal-surface'
+                  : 'text-terminal-muted hover:text-white'
+              )}
+            >
+              <BarChart3 className="w-4 h-4" />
+              Accuracy Log
+            </button>
+          </div>
+          
+          {/* Tab Content */}
+          <div className="flex-1 overflow-hidden">
+            {sideTab === 'prediction' ? (
+              <PredictionPanel />
+            ) : (
+              <PredictionLogPanel />
+            )}
+          </div>
         </div>
       </main>
     </div>
