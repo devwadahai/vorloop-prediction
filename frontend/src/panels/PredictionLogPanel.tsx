@@ -217,8 +217,15 @@ function PredictionRow({ prediction, validated }: { prediction: PredictionRecord
   const actualUp = prediction.actual_move !== null ? prediction.actual_move > 0 : null
   const isCorrect = prediction.prediction_correct
 
-  // Format time in local timezone
-  const date = new Date(prediction.timestamp)
+  // Format time in local timezone - handle UTC timestamps
+  const parseTimestamp = (ts: string) => {
+    if (!ts) return new Date()
+    // Add Z if not present to treat as UTC
+    const utcTs = ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z'
+    return new Date(utcTs)
+  }
+  
+  const date = parseTimestamp(prediction.timestamp)
   const time = date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -229,7 +236,8 @@ function PredictionRow({ prediction, validated }: { prediction: PredictionRecord
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffMins = Math.floor(diffMs / 60000)
-  const relativeTime = diffMins < 1 ? 'just now' 
+  const relativeTime = isNaN(diffMins) ? time
+    : diffMins < 1 ? 'just now' 
     : diffMins < 60 ? `${diffMins}m ago`
     : diffMins < 1440 ? `${Math.floor(diffMins / 60)}h ago`
     : time
@@ -288,33 +296,46 @@ function PredictionRow({ prediction, validated }: { prediction: PredictionRecord
           )}
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Prediction */}
+        <div className="flex items-center gap-3">
+          {/* Prediction - show the direction confidence, not p_up */}
           <div className="flex items-center gap-1">
             <span className="text-xs text-terminal-muted">Pred:</span>
             {predictedUp ? (
-              <TrendingUp className="w-3.5 h-3.5 text-bull" />
+              <>
+                <TrendingUp className="w-3.5 h-3.5 text-bull" />
+                <span className="font-mono text-xs text-bull">
+                  UP {(prediction.p_up * 100).toFixed(0)}%
+                </span>
+              </>
             ) : (
-              <TrendingDown className="w-3.5 h-3.5 text-bear" />
+              <>
+                <TrendingDown className="w-3.5 h-3.5 text-bear" />
+                <span className="font-mono text-xs text-bear">
+                  DOWN {((1 - prediction.p_up) * 100).toFixed(0)}%
+                </span>
+              </>
             )}
-            <span className={clsx(
-              'font-mono text-xs',
-              predictedUp ? 'text-bull' : 'text-bear'
-            )}>
-              {(prediction.p_up * 100).toFixed(0)}%
-            </span>
           </div>
 
-          {/* Actual */}
+          {/* Actual - show direction and move */}
           {validated && prediction.actual_move !== null && (
             <div className="flex items-center gap-1">
-              <span className="text-xs text-terminal-muted">Actual:</span>
-              <span className={clsx(
-                'font-mono text-xs',
-                actualUp ? 'text-bull' : 'text-bear'
-              )}>
-                {(prediction.actual_move * 100).toFixed(3)}%
-              </span>
+              <span className="text-xs text-terminal-muted">→</span>
+              {actualUp ? (
+                <>
+                  <TrendingUp className="w-3.5 h-3.5 text-bull" />
+                  <span className="font-mono text-xs text-bull">
+                    UP {(prediction.actual_move * 100).toFixed(2)}%
+                  </span>
+                </>
+              ) : (
+                <>
+                  <TrendingDown className="w-3.5 h-3.5 text-bear" />
+                  <span className="font-mono text-xs text-bear">
+                    DOWN {(Math.abs(prediction.actual_move) * 100).toFixed(2)}%
+                  </span>
+                </>
+              )}
             </div>
           )}
         </div>

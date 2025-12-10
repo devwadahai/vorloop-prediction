@@ -6,7 +6,7 @@ import { formatPercent, formatSignedPercent, formatTime } from '../utils/format'
 import clsx from 'clsx'
 
 export function PredictionPanel() {
-  const { prediction, explanation, fetchExplanation, isLoading } = useStore()
+  const { prediction, explanation, fetchExplanation, isLoading, horizonMinutes, setHorizonMinutes } = useStore()
   
   useEffect(() => {
     if (prediction) {
@@ -38,9 +38,9 @@ export function PredictionPanel() {
             {[1, 3, 5, 10].map((mins) => (
               <button
                 key={mins}
-                onClick={() => useStore.getState().setHorizonMinutes(mins)}
+                onClick={() => setHorizonMinutes(mins)}
                 className={`px-2 py-0.5 text-xs rounded ${
-                  prediction.horizon_minutes === mins
+                  horizonMinutes === mins
                     ? 'bg-accent text-white'
                     : 'bg-terminal-bg text-terminal-muted hover:text-white'
                 }`}
