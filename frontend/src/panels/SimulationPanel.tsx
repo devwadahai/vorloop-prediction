@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { 
   Play, Pause, RotateCcw, TrendingUp, TrendingDown, 
   DollarSign, Target, Clock, History, Zap, AlertCircle
@@ -40,22 +40,97 @@ const FEES = {
   mexc: { spot: 0.001, futures: 0.0002 },     // 0.1% spot, 0.02% futures
 }
 
+const STORAGE_KEY = 'vorloop_paper_trading'
+
+// Load simulation state from localStorage
+const loadSimState = (): SimulationState | null => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (!saved) return null
+    const parsed = JSON.parse(saved)
+    // Convert date strings back to Date objects
+    return {
+      ...parsed,
+      startTime: parsed.startTime ? new Date(parsed.startTime) : undefined,
+      trades: parsed.trades.map((t: any) => ({
+        ...t,
+        entryTime: new Date(t.entryTime),
+        exitTime: t.exitTime ? new Date(t.exitTime) : undefined,
+      })),
+    }
+  } catch (e) {
+    console.error('Failed to load simulation state:', e)
+    return null
+  }
+}
+
+// Save simulation state to localStorage
+const saveSimState = (state: SimulationState) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch (e) {
+    console.error('Failed to save simulation state:', e)
+  }
+}
+
+// Load open position from localStorage
+const loadOpenPosition = (): Trade | null => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY + '_position')
+    if (!saved) return null
+    const parsed = JSON.parse(saved)
+    return {
+      ...parsed,
+      entryTime: new Date(parsed.entryTime),
+      exitTime: parsed.exitTime ? new Date(parsed.exitTime) : undefined,
+    }
+  } catch (e) {
+    return null
+  }
+}
+
+// Save open position to localStorage
+const saveOpenPosition = (position: Trade | null) => {
+  try {
+    if (position) {
+      localStorage.setItem(STORAGE_KEY + '_position', JSON.stringify(position))
+    } else {
+      localStorage.removeItem(STORAGE_KEY + '_position')
+    }
+  } catch (e) {
+    console.error('Failed to save position:', e)
+  }
+}
+
 export function SimulationPanel() {
   const { marketData, prediction } = useStore()
   const currentPrice = marketData?.candles?.slice(-1)[0]?.close || 0
   
-  const [sim, setSim] = useState<SimulationState>({
-    startingBalance: 100000,
-    currentBalance: 100000,
-    trades: [],
-    isRunning: false,
-    exchange: 'mexc',
-    market: 'futures',
+  // Load initial state from localStorage
+  const [sim, setSim] = useState<SimulationState>(() => {
+    const saved = loadSimState()
+    return saved || {
+      startingBalance: 100000,
+      currentBalance: 100000,
+      trades: [],
+      isRunning: false,
+      exchange: 'mexc',
+      market: 'futures',
+    }
   })
   
   const [positionSize, setPositionSize] = useState(10) // % of balance
   const [customSize, setCustomSize] = useState('')
-  const [openPosition, setOpenPosition] = useState<Trade | null>(null)
+  const [openPosition, setOpenPosition] = useState<Trade | null>(() => loadOpenPosition())
+  
+  // Save to localStorage whenever state changes
+  useEffect(() => {
+    saveSimState(sim)
+  }, [sim])
+  
+  useEffect(() => {
+    saveOpenPosition(openPosition)
+  }, [openPosition])
   
   // Calculate effective position size
   const effectiveSize = customSize 
@@ -163,15 +238,19 @@ export function SimulationPanel() {
   
   // Reset simulation
   const resetSimulation = () => {
-    setSim({
+    const newState = {
       startingBalance: sim.startingBalance,
       currentBalance: sim.startingBalance,
       trades: [],
       isRunning: false,
       exchange: sim.exchange,
       market: sim.market,
-    })
+    }
+    setSim(newState)
     setOpenPosition(null)
+    // Clear localStorage
+    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(STORAGE_KEY + '_position')
   }
   
   // Format helpers
