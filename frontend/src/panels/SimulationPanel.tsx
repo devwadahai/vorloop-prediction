@@ -302,53 +302,98 @@ export function SimulationPanel() {
       </div>
       
       {/* Open Position */}
-      {openPosition && (
-        <div className={clsx(
-          'p-4 border-b-2',
-          currentPnl >= 0 ? 'bg-bull/10 border-bull' : 'bg-bear/10 border-bear'
-        )}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              {openPosition.type === 'buy' ? (
-                <TrendingUp className="w-4 h-4 text-bull" />
-              ) : (
-                <TrendingDown className="w-4 h-4 text-bear" />
-              )}
-              <span className="font-semibold uppercase">{openPosition.type}</span>
-              <span className="text-terminal-muted text-sm">
-                @ ${openPosition.entryPrice.toFixed(2)}
-              </span>
+      {openPosition && (() => {
+        const exitFee = openPosition.size * feeRate
+        const totalFees = openPosition.fees + exitFee
+        const netPnl = currentPnl - exitFee
+        const netPnlPct = netPnl / openPosition.size * 100
+        const breakeven = (totalFees / openPosition.size) * 100
+        
+        return (
+          <div className={clsx(
+            'p-4 border-b-2',
+            netPnl >= 0 ? 'bg-bull/10 border-bull' : 'bg-bear/10 border-bear'
+          )}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                {openPosition.type === 'buy' ? (
+                  <TrendingUp className="w-4 h-4 text-bull" />
+                ) : (
+                  <TrendingDown className="w-4 h-4 text-bear" />
+                )}
+                <span className="font-semibold uppercase">{openPosition.type}</span>
+                <span className="text-terminal-muted text-sm">
+                  @ ${openPosition.entryPrice.toFixed(2)}
+                </span>
+              </div>
+              <button
+                onClick={closePosition}
+                className={clsx(
+                  'px-3 py-1 text-sm font-semibold rounded transition-colors',
+                  netPnl >= 0 
+                    ? 'bg-bull hover:bg-bull/80 text-white' 
+                    : 'bg-bear hover:bg-bear/80 text-white'
+                )}
+              >
+                Close {netPnl >= 0 ? `+${formatUsd(netPnl)}` : formatUsd(netPnl)}
+              </button>
             </div>
-            <button
-              onClick={closePosition}
-              className={clsx(
-                'px-3 py-1 text-sm font-semibold rounded',
-                'bg-terminal-bg hover:bg-terminal-border transition-colors'
-              )}
-            >
-              Close Position
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-sm">
-            <div>
-              <div className="text-xs text-terminal-muted">Size</div>
-              <div className="font-mono">{formatUsd(openPosition.size)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-terminal-muted">Unrealized P&L</div>
-              <div className={clsx('font-mono font-bold', currentPnl >= 0 ? 'text-bull' : 'text-bear')}>
-                {formatUsd(currentPnl)}
+            
+            {/* Position Details */}
+            <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+              <div>
+                <div className="text-xs text-terminal-muted">Position Size</div>
+                <div className="font-mono">{formatUsd(openPosition.size)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-terminal-muted">Current Price</div>
+                <div className="font-mono">${currentPrice.toFixed(2)}</div>
               </div>
             </div>
-            <div>
-              <div className="text-xs text-terminal-muted">P&L %</div>
-              <div className={clsx('font-mono font-bold', currentPnlPct >= 0 ? 'text-bull' : 'text-bear')}>
-                {formatPct(currentPnlPct)}
+            
+            {/* P&L Breakdown */}
+            <div className="bg-terminal-bg/50 rounded p-2 space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-terminal-muted">Gross P&L:</span>
+                <span className={clsx('font-mono', currentPnl >= 0 ? 'text-bull' : 'text-bear')}>
+                  {formatUsd(currentPnl)} ({formatPct(currentPnlPct)})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-terminal-muted">Entry Fee (paid):</span>
+                <span className="font-mono text-amber-400">-{formatUsd(openPosition.fees)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-terminal-muted">Exit Fee (on close):</span>
+                <span className="font-mono text-amber-400">-{formatUsd(exitFee)}</span>
+              </div>
+              <div className="flex justify-between border-t border-terminal-border pt-1 mt-1">
+                <span className="font-semibold">Net P&L (after fees):</span>
+                <span className={clsx('font-mono font-bold', netPnl >= 0 ? 'text-bull' : 'text-bear')}>
+                  {formatUsd(netPnl)} ({formatPct(netPnlPct)})
+                </span>
               </div>
             </div>
+            
+            {/* Breakeven Warning */}
+            {netPnl < 0 && currentPnl >= 0 && (
+              <div className="mt-2 p-2 bg-amber-400/10 rounded text-xs text-amber-400">
+                ⚠️ Gross profit but net loss due to fees! Need +{breakeven.toFixed(3)}% to breakeven.
+              </div>
+            )}
+            {netPnl < 0 && currentPnl < 0 && (
+              <div className="mt-2 p-2 bg-bear/10 rounded text-xs text-bear">
+                📉 Position is in loss. Breakeven needs +{breakeven.toFixed(3)}% from entry.
+              </div>
+            )}
+            {netPnl > 0 && (
+              <div className="mt-2 p-2 bg-bull/10 rounded text-xs text-bull">
+                ✅ Profitable after fees! Safe to close.
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )
+      })()}
       
       {/* Trade Buttons */}
       {!openPosition && (
