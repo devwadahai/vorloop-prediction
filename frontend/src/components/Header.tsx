@@ -1,4 +1,4 @@
-import { TrendingUp, Settings, Bell, ChevronDown } from 'lucide-react'
+import { Settings, Bell, ChevronDown } from 'lucide-react'
 import { useStore } from '../state/store'
 import { formatPrice, formatSignedPercent } from '../utils/format'
 import type { TimeInterval } from '../types'
@@ -37,14 +37,6 @@ export function Header() {
       <div className="h-full px-4 flex items-center justify-between">
         {/* Logo & Asset Selector */}
         <div className="flex items-center gap-6">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-bull flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-display font-bold text-lg">VorLoop</span>
-          </div>
-          
           {/* Asset Selector */}
           <div className="flex items-center gap-1 bg-terminal-bg rounded-lg p-1">
             {ASSETS.map((asset) => (

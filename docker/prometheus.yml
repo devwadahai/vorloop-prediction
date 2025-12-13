@@ -37,3 +37,5 @@ scrape_configs:
     static_configs:
       - targets: ['db:5432']
 
+
+

@@ -100,3 +100,5 @@ SELECT add_retention_policy('predictions', INTERVAL '365 days', if_not_exists =>
 -- Grant permissions
 GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres;
 
+
+

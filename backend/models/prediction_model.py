@@ -342,3 +342,5 @@ class EnsemblePredictor:
             "magnitude": self.magnitude_model.feature_importance,
         }
 
+
+

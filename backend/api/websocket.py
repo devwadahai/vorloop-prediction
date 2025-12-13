@@ -125,3 +125,5 @@ async def push_alert(asset: str, alert: dict):
         "data": alert
     })
 
+
+
