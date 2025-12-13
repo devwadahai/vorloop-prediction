@@ -5,7 +5,7 @@ import { MarketStructurePanel } from './panels/MarketStructurePanel'
 import { PredictionLogPanel } from './panels/PredictionLogPanel'
 import { FeeCalculatorPanel } from './panels/FeeCalculatorPanel'
 import { SimulationPanel } from './panels/SimulationPanel'
-import { PolymarketPanel } from './panels/PolymarketPanel'
+import { PolymarketApp } from './polymarket'
 import { Header } from './components/Header'
 import { useStore } from './state/store'
 import { BarChart3, Brain, Calculator, Zap, Target } from 'lucide-react'
@@ -13,7 +13,8 @@ import clsx from 'clsx'
 
 function App() {
   const { fetchMarketData, fetchPrediction, selectedAsset } = useStore()
-  const [sideTab, setSideTab] = useState<'prediction' | 'log' | 'fees' | 'sim' | 'poly'>('prediction')
+  const [sideTab, setSideTab] = useState<'prediction' | 'log' | 'fees' | 'sim'>('prediction')
+  const [showPolymarket, setShowPolymarket] = useState(false)
 
   useEffect(() => {
     // Initial data fetch
@@ -29,6 +30,11 @@ function App() {
       clearInterval(predictionInterval)
     }
   }, [selectedAsset, fetchMarketData, fetchPrediction])
+
+  // Show Polymarket full-page view
+  if (showPolymarket) {
+    return <PolymarketApp onBack={() => setShowPolymarket(false)} />
+  }
 
   return (
     <div className="h-screen flex flex-col bg-terminal-bg">
@@ -103,13 +109,8 @@ function App() {
               Sim
             </button>
             <button
-              onClick={() => setSideTab('poly')}
-              className={clsx(
-                'flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium transition-colors',
-                sideTab === 'poly'
-                  ? 'text-white border-b-2 border-purple-400 bg-terminal-surface'
-                  : 'text-terminal-muted hover:text-white'
-              )}
+              onClick={() => setShowPolymarket(true)}
+              className="flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium transition-colors text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
             >
               <Target className="w-3.5 h-3.5" />
               Poly
@@ -122,7 +123,6 @@ function App() {
             {sideTab === 'log' && <PredictionLogPanel />}
             {sideTab === 'fees' && <FeeCalculatorPanel />}
             {sideTab === 'sim' && <SimulationPanel />}
-            {sideTab === 'poly' && <PolymarketPanel />}
           </div>
         </div>
       </main>
