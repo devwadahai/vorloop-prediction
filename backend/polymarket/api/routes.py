@@ -134,13 +134,12 @@ async def list_markets(
 ):
     """
     List active markets from Polymarket.
+    Returns cached data instantly (refreshed in background every 20s).
     """
     try:
         market_service = req.app.state.pm_market_service
         
-        # Fetch fresh data
-        await market_service.fetch_markets()
-        
+        # Use cached markets (fetched in background) - instant response
         markets = list(market_service.markets.values())
         
         # Filter by category
@@ -172,15 +171,22 @@ async def get_market(req: Request, market_id: str):
 
 
 @router.get("/orderbook/{token_id}", response_model=OrderBookResponse)
-async def get_orderbook(req: Request, token_id: str):
+async def get_orderbook(req: Request, token_id: str, fresh: bool = Query(default=False)):
     """
     Get order book for a token.
+    Uses cache by default, set fresh=true to force refresh.
     """
     try:
         market_service = req.app.state.pm_market_service
         
-        # Fetch fresh order book
-        order_book = await market_service.fetch_order_book(token_id)
+        # Try cache first unless fresh requested
+        if not fresh:
+            order_book = market_service.get_order_book(token_id)
+            if order_book:
+                return order_book.to_dict()
+        
+        # Fetch from API
+        order_book = await market_service.fetch_order_book(token_id, force=fresh)
         
         if not order_book:
             raise HTTPException(status_code=404, detail="Order book not found")
@@ -230,30 +236,55 @@ async def get_probability(req: Request, market_id: str):
 @router.get("/opportunities", response_model=List[ProbabilityResponse])
 async def get_opportunities(
     req: Request,
-    min_edge: float = Query(default=1.5, description="Minimum edge %"),
+    min_edge: float = Query(default=1.0, description="Minimum edge %"),
     limit: int = Query(default=10, ge=1, le=50),
+    fresh: bool = Query(default=False, description="Force fresh computation"),
 ):
     """
     Get tradeable opportunities across all markets.
+    Returns pre-computed cached opportunities for instant response.
     """
     try:
         market_service = req.app.state.pm_market_service
+        
+        # Use pre-computed cached opportunities (instant response)
+        if not fresh and market_service.cached_opportunities:
+            opportunities = [
+                o for o in market_service.cached_opportunities
+                if abs(o.get('edge_pct', 0)) >= min_edge
+            ]
+            return opportunities[:limit]
+        
+        # Fallback: compute on demand (slower)
         prob_service = req.app.state.pm_probability_service
         
-        # Fetch markets and order books
-        await market_service.fetch_markets()
+        # Use cached markets (sorted by volume)
+        markets = sorted(
+            market_service.markets.values(),
+            key=lambda m: m.volume_24h,
+            reverse=True
+        )[:30]  # Top 30 by volume
         
+        # Get token IDs that need order books
+        token_ids = [m.yes_token.token_id for m in markets if m.yes_token]
+        
+        # Fetch order books in parallel (uses cache when available)
+        await market_service.fetch_orderbooks_batch(token_ids)
+        
+        # Calculate probabilities
         opportunities = []
-        for market in list(market_service.markets.values())[:50]:  # Limit scan
+        for market in markets:
             if not market.yes_token:
                 continue
             
+            order_book = market_service.get_order_book(market.yes_token.token_id)
+            if not order_book or not order_book.mid_price:
+                continue
+            
             try:
-                order_book = await market_service.fetch_order_book(market.yes_token.token_id)
-                if order_book:
-                    estimate = prob_service.estimate(market, order_book)
-                    if estimate.is_tradeable and abs(estimate.edge_pct) >= min_edge:
-                        opportunities.append(estimate.to_dict())
+                estimate = prob_service.estimate(market, order_book)
+                if estimate.is_tradeable and abs(estimate.edge_pct) >= min_edge:
+                    opportunities.append(estimate.to_dict())
             except Exception:
                 continue
         

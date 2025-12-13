@@ -101,38 +101,47 @@ export function PolymarketApp({ onBack }: PolymarketAppProps) {
   const [account, setAccount] = useState<Account | null>(null)
   const [positions, setPositions] = useState<Position[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [initialLoad, setInitialLoad] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null)
   const [view, setView] = useState<'browse' | 'opportunities' | 'positions' | 'stats'>('opportunities')
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  const fetchData = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     setError(null)
     try {
-      const [marketsRes, oppsRes, accountRes, positionsRes, statsRes] = await Promise.all([
+      // Fetch critical data first (opportunities for main view)
+      const oppsRes = await fetch(`${API_BASE}/opportunities?min_edge=1.0&limit=20`)
+      if (oppsRes.ok) {
+        setOpportunities(await oppsRes.json())
+        setInitialLoad(false)
+      }
+
+      // Then fetch rest in parallel
+      const [marketsRes, accountRes, positionsRes, statsRes] = await Promise.all([
         fetch(`${API_BASE}/markets?limit=50`),
-        fetch(`${API_BASE}/opportunities?min_edge=1.0&limit=20`),
         fetch(`${API_BASE}/account`).catch(() => null),
         fetch(`${API_BASE}/positions`).catch(() => null),
         fetch(`${API_BASE}/stats`),
       ])
 
       if (marketsRes.ok) setMarkets(await marketsRes.json())
-      if (oppsRes.ok) setOpportunities(await oppsRes.json())
       if (accountRes?.ok) setAccount(await accountRes.json())
       if (positionsRes?.ok) setPositions(await positionsRes.json())
       if (statsRes.ok) setStats(await statsRes.json())
     } catch (e) {
       setError('Failed to connect to backend. Make sure the server is running.')
+      setInitialLoad(false)
     }
     setLoading(false)
   }, [])
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 30000)
+    // Background refresh every 30 seconds (non-blocking)
+    const interval = setInterval(() => fetchData(true), 30000)
     return () => clearInterval(interval)
   }, [fetchData])
 
@@ -298,31 +307,41 @@ export function PolymarketApp({ onBack }: PolymarketAppProps) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-hidden">
-        {view === 'opportunities' && (
-          <MarketBrowser
-            markets={markets}
-            opportunities={opportunities}
-            onSelectMarket={setSelectedMarket}
-            showOpportunitiesOnly
-          />
-        )}
-        {view === 'browse' && (
-          <MarketBrowser
-            markets={markets}
-            opportunities={opportunities}
-            onSelectMarket={setSelectedMarket}
-          />
-        )}
-        {view === 'positions' && (
-          <PositionsPanel
-            positions={positions}
-            markets={markets}
-            account={account}
-            onRefresh={fetchData}
-          />
-        )}
-        {view === 'stats' && (
-          <StatsPanel stats={stats} account={account} />
+        {initialLoad ? (
+          <div className="h-full flex flex-col items-center justify-center">
+            <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-4" />
+            <p className="text-gray-400">Loading Polymarket data...</p>
+            <p className="text-sm text-gray-600 mt-1">Fetching markets and order books</p>
+          </div>
+        ) : (
+          <>
+            {view === 'opportunities' && (
+              <MarketBrowser
+                markets={markets}
+                opportunities={opportunities}
+                onSelectMarket={setSelectedMarket}
+                showOpportunitiesOnly
+              />
+            )}
+            {view === 'browse' && (
+              <MarketBrowser
+                markets={markets}
+                opportunities={opportunities}
+                onSelectMarket={setSelectedMarket}
+              />
+            )}
+            {view === 'positions' && (
+              <PositionsPanel
+                positions={positions}
+                markets={markets}
+                account={account}
+                onRefresh={() => fetchData()}
+              />
+            )}
+            {view === 'stats' && (
+              <StatsPanel stats={stats} account={account} />
+            )}
+          </>
         )}
       </main>
     </div>
