@@ -19,7 +19,27 @@
       "pnl": null,
       "prediction_correct": null,
       "edge_realized": null
+    },
+    {
+      "decision_id": "93391566-70b5-4bfb-9cfc-73c80cc1d224",
+      "market_id": "516861",
+      "token_id": "112540911653160777059655478391259433595972605218365763034134019729862917878641",
+      "timestamp": "2025-12-13T19:28:19.547204Z",
+      "side": "BUY",
+      "size": 100.0,
+      "entry_price": 0.5,
+      "fair_prob": 0.5000002812621483,
+      "market_prob": 0.5,
+      "edge": 2.812621483494482e-07,
+      "confidence": 0.4319999999999998,
+      "fill_price": 0.505,
+      "execution_drag": 100.00000000000009,
+      "outcome": null,
+      "final_value": null,
+      "pnl": null,
+      "prediction_correct": null,
+      "edge_realized": null
     }
   ],
-  "saved_at": "2025-12-13T19:26:17.502292Z"
+  "saved_at": "2025-12-13T19:28:19.547324Z"
 }

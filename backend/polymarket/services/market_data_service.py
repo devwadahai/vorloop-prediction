@@ -284,16 +284,23 @@ class MarketDataService:
             yes_token = None
             no_token = None
             
+            # clobTokenIds might be a JSON string, parse it
+            if isinstance(clob_token_ids, str):
+                try:
+                    clob_token_ids = json.loads(clob_token_ids)
+                except:
+                    clob_token_ids = []
+            
             # clobTokenIds[0] is YES, clobTokenIds[1] is NO
-            if len(clob_token_ids) >= 1 and clob_token_ids[0]:
+            if isinstance(clob_token_ids, list) and len(clob_token_ids) >= 1 and clob_token_ids[0]:
                 yes_token = Token(
-                    token_id=clob_token_ids[0],
+                    token_id=str(clob_token_ids[0]),
                     market_id=market_id,
                     side=TokenSide.YES,
                 )
-            if len(clob_token_ids) >= 2 and clob_token_ids[1]:
+            if isinstance(clob_token_ids, list) and len(clob_token_ids) >= 2 and clob_token_ids[1]:
                 no_token = Token(
-                    token_id=clob_token_ids[1],
+                    token_id=str(clob_token_ids[1]),
                     market_id=market_id,
                     side=TokenSide.NO,
                 )
