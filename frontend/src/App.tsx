@@ -5,14 +5,15 @@ import { MarketStructurePanel } from './panels/MarketStructurePanel'
 import { PredictionLogPanel } from './panels/PredictionLogPanel'
 import { FeeCalculatorPanel } from './panels/FeeCalculatorPanel'
 import { SimulationPanel } from './panels/SimulationPanel'
+import { PolymarketPanel } from './panels/PolymarketPanel'
 import { Header } from './components/Header'
 import { useStore } from './state/store'
-import { BarChart3, Brain, Calculator, Zap } from 'lucide-react'
+import { BarChart3, Brain, Calculator, Zap, Target } from 'lucide-react'
 import clsx from 'clsx'
 
 function App() {
   const { fetchMarketData, fetchPrediction, selectedAsset } = useStore()
-  const [sideTab, setSideTab] = useState<'prediction' | 'log' | 'fees' | 'sim'>('prediction')
+  const [sideTab, setSideTab] = useState<'prediction' | 'log' | 'fees' | 'sim' | 'poly'>('prediction')
 
   useEffect(() => {
     // Initial data fetch
@@ -101,6 +102,18 @@ function App() {
               <Zap className="w-3.5 h-3.5" />
               Sim
             </button>
+            <button
+              onClick={() => setSideTab('poly')}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium transition-colors',
+                sideTab === 'poly'
+                  ? 'text-white border-b-2 border-purple-400 bg-terminal-surface'
+                  : 'text-terminal-muted hover:text-white'
+              )}
+            >
+              <Target className="w-3.5 h-3.5" />
+              Poly
+            </button>
           </div>
           
           {/* Tab Content */}
@@ -109,6 +122,7 @@ function App() {
             {sideTab === 'log' && <PredictionLogPanel />}
             {sideTab === 'fees' && <FeeCalculatorPanel />}
             {sideTab === 'sim' && <SimulationPanel />}
+            {sideTab === 'poly' && <PolymarketPanel />}
           </div>
         </div>
       </main>

@@ -17,6 +17,15 @@ from services.data_service import DataService
 from services.model_service import ModelService
 from services.prediction_tracker import PredictionTracker
 
+# Polymarket imports
+from polymarket import (
+    router as polymarket_router,
+    MarketDataService as PMMarketDataService,
+    PaperExchangeService as PMExchangeService,
+    ProbabilityModelService as PMProbabilityService,
+    EvaluationService as PMEvaluationService,
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
@@ -45,8 +54,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         app.state.prediction_tracker.start_validation_loop()
     )
     
+    # Initialize Polymarket services
+    logger.info("Initializing Polymarket services...")
+    app.state.pm_market_service = PMMarketDataService()
+    app.state.pm_exchange_service = PMExchangeService()
+    app.state.pm_probability_service = PMProbabilityService()
+    app.state.pm_evaluation_service = PMEvaluationService()
+    app.state.pm_current_account = None
+    
+    # Start Polymarket market data service
+    await app.state.pm_market_service.start()
+    
     logger.info("Application started successfully")
     logger.info("📊 Prediction tracking enabled - validations will run automatically")
+    logger.info("🎯 Polymarket paper trading simulator ready")
     
     yield
     
@@ -70,6 +91,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             pass
     
     await app.state.data_service.close()
+    
+    # Stop Polymarket services
+    if hasattr(app.state, 'pm_market_service'):
+        await app.state.pm_market_service.stop()
+    
     logger.info("Shutdown complete")
 
 
@@ -92,6 +118,7 @@ app.add_middleware(
 # Include routers
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/ws")
+app.include_router(polymarket_router, prefix="/api/v1")
 
 
 @app.get("/health")
