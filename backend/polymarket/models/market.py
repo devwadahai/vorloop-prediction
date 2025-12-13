@@ -79,7 +79,12 @@ class Market:
     @property
     def time_to_resolution(self) -> float:
         """Hours until end_time."""
-        delta = self.end_time - datetime.utcnow()
+        now = datetime.utcnow()
+        end = self.end_time
+        # Handle timezone-aware vs naive comparison
+        if end.tzinfo is not None:
+            end = end.replace(tzinfo=None)
+        delta = end - now
         return max(0, delta.total_seconds() / 3600)
     
     def to_dict(self) -> dict:
