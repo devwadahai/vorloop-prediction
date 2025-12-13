@@ -384,13 +384,11 @@ export function MarketDetail({ market, account, onBack, onAccountCreate, onRefre
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={() => submitOrder('BUY')}
-                    disabled={submitting || !probability.is_tradeable}
+                    disabled={submitting}
                     className={clsx(
                       'flex items-center justify-center gap-2 py-4 rounded-xl font-semibold text-lg transition-all',
-                      probability.edge > 0
-                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                        : 'bg-[#1e1e2e] text-gray-400',
-                      (submitting || !probability.is_tradeable) && 'opacity-50 cursor-not-allowed'
+                      'bg-emerald-600 hover:bg-emerald-500 text-white',
+                      submitting && 'opacity-50 cursor-not-allowed'
                     )}
                   >
                     <TrendingUp className="w-5 h-5" />
@@ -398,13 +396,11 @@ export function MarketDetail({ market, account, onBack, onAccountCreate, onRefre
                   </button>
                   <button
                     onClick={() => submitOrder('SELL')}
-                    disabled={submitting || !probability.is_tradeable}
+                    disabled={submitting}
                     className={clsx(
                       'flex items-center justify-center gap-2 py-4 rounded-xl font-semibold text-lg transition-all',
-                      probability.edge < 0
-                        ? 'bg-red-600 hover:bg-red-500 text-white'
-                        : 'bg-[#1e1e2e] text-gray-400',
-                      (submitting || !probability.is_tradeable) && 'opacity-50 cursor-not-allowed'
+                      'bg-red-600 hover:bg-red-500 text-white',
+                      submitting && 'opacity-50 cursor-not-allowed'
                     )}
                   >
                     <TrendingDown className="w-5 h-5" />
@@ -412,8 +408,15 @@ export function MarketDetail({ market, account, onBack, onAccountCreate, onRefre
                   </button>
                 </div>
 
-                {/* Suggested Trade */}
-                {probability.is_tradeable && probability.suggested_side && (
+                {/* Warning if low edge */}
+                {Math.abs(probability.edge_pct) < 1.5 && (
+                  <div className="mt-3 p-2 bg-amber-500/10 rounded-lg text-xs text-amber-400">
+                    ⚠️ Low edge ({probability.edge_pct.toFixed(2)}%) - consider waiting for better opportunity
+                  </div>
+                )}
+
+                {/* Edge Indicator */}
+                {Math.abs(probability.edge_pct) >= 0.5 && (
                   <div className={clsx(
                     'mt-4 p-3 rounded-lg flex items-center gap-3',
                     probability.edge > 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'
@@ -426,8 +429,8 @@ export function MarketDetail({ market, account, onBack, onAccountCreate, onRefre
                       'text-sm',
                       probability.edge > 0 ? 'text-emerald-400' : 'text-red-400'
                     )}>
-                      Suggested: Buy {probability.edge > 0 ? 'YES' : 'NO'} — 
-                      Edge of {Math.abs(probability.edge_pct).toFixed(2)}% detected
+                      {probability.edge > 0 ? 'YES' : 'NO'} appears underpriced — 
+                      Edge: {Math.abs(probability.edge_pct).toFixed(2)}%
                     </span>
                   </div>
                 )}

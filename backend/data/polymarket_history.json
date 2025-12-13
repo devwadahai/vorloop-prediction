@@ -1,0 +1,25 @@
+{
+  "decisions": [
+    {
+      "decision_id": "a11c0d33-5394-432b-b1f4-60591bf6a245",
+      "market_id": "517042",
+      "token_id": "[",
+      "timestamp": "2025-12-13T19:26:17.501690Z",
+      "side": "BUY",
+      "size": 100.0,
+      "entry_price": 0.35,
+      "fair_prob": 0.34989095121758185,
+      "market_prob": 0.35,
+      "edge": -0.00010904878241813076,
+      "confidence": 0.32000000000000006,
+      "fill_price": 0.36,
+      "execution_drag": 285.714285714286,
+      "outcome": null,
+      "final_value": null,
+      "pnl": null,
+      "prediction_correct": null,
+      "edge_realized": null
+    }
+  ],
+  "saved_at": "2025-12-13T19:26:17.502292Z"
+}
